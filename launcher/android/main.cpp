@@ -53,7 +53,10 @@ void SetLauncherArgs()
 #define D(a) LauncherArgv[iLastArgs++] = (char*)a
 
 	static char binPath[2048];
-	snprintf(binPath, sizeof binPath, "%s/hl2_linux", getenv("APP_DATA_PATH") );
+	const char *bindir = getenv("NATIVE_LIB_DIR");
+	if ( !bindir || !bindir[0] )
+		bindir = getenv("APP_DATA_PATH");
+	snprintf(binPath, sizeof binPath, "%s/hl2_linux", bindir );
 	D(binPath);
 
 	D("-nouserclip");

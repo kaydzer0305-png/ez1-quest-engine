@@ -23,25 +23,48 @@ jobs:
       - name: Build
         run: ./waf build
 
-      - name: Collect artifacts
-        if: always()
+      - name: Collect native libraries
         run: |
-          mkdir -p dist
-          find . -name '*.so' -not -path './.git/*' -print0 | xargs -0 -r -I{} cp {} dist/ || true
-          tar czf dist/engine-arm64.tar.gz -C dist . || true
+          set -x
+          mkdir -p apk/lib/arm64-v8a
+          find build -name '*.so' -print0 | xargs -0 -r -I{} cp {} apk/lib/arm64-v8a/
+          cp lib/android/aarch64/libSDL2.so apk/lib/arm64-v8a/
+          cp "$ANDROID_NDK_HOME/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" apk/lib/arm64-v8a/
+          ls -la apk/lib/arm64-v8a
 
-      - name: Upload engine libs
+      - name: Package APK
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          PLAT=$(ls -d "$ANDROID_SDK_ROOT"/platforms/android-* | sort -V -t- -k2 | tail -1)
+          echo "build-tools: $BT  platform: $PLAT"
+          mkdir -p work/classes
+          javac -classpath "$PLAT/android.jar" -d work/classes $(find android/java thirdparty/SDL-src/android-project/app/src/main/java -name '*.java')
+          "$BT/d8" --release --lib "$PLAT/android.jar" --output work $(find work/classes -name '*.class')
+          "$BT/aapt2" link --manifest android/manifest/AndroidManifest.xml -I "$PLAT/android.jar" \
+              --min-sdk-version 24 --target-sdk-version 33 \
+              -o work/base.apk
+          ( cd work && zip -q base.apk classes.dex )
+          ( cd apk && zip -qr ../work/base.apk lib )
+          "$BT/zipalign" -f 4 work/base.apk SourceQuest.apk
+          keytool -genkeypair -keystore work/debug.keystore -alias androiddebugkey \
+              -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US" \
+              -keyalg RSA -validity 10000
+          "$BT/apksigner" sign --ks work/debug.keystore --ks-pass pass:android --key-pass pass:android \
+              --out SourceQuest.apk SourceQuest.apk
+          ls -la SourceQuest.apk
+
+      - name: Upload APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: engine-arm64
-          path: dist/engine-arm64.tar.gz
+          name: SourceQuest-apk
+          path: SourceQuest.apk
           if-no-files-found: ignore
 
       - name: Upload logs on failure
         if: failure()
-        run: |
-          tar czf logs.tar.gz $(find . -maxdepth 3 -name '*.log' -not -path './.git/*' | head -20) || true
+        run: tar czf logs.tar.gz $(find . -maxdepth 3 -name '*.log' -not -path './.git/*' | head -20) || true
 
       - name: Upload logs artifact
         if: failure()
