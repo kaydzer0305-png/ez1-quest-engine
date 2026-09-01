@@ -414,8 +414,7 @@ def check_deps(conf):
 			conf.check(lib='unwind', uselib_store='UNWIND')
 			conf.check(lib='crypto', uselib_store='CRYPTO')
 			conf.check(lib='ssl', uselib_store='SSL')
-		if conf.android.ndk_rev < 18:
-			conf.check(lib='android_support', uselib_store='ANDROID_SUPPORT')
+		conf.check(lib='android_support', uselib_store='ANDROID_SUPPORT')
 		conf.check(lib='opus', uselib_store='OPUS')
 
 	if conf.env.DEST_OS == 'win32':
