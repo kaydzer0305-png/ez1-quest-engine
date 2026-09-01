@@ -1,0 +1,54 @@
+name: build-android-arm64
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  android-arm64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup NDK r20b
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
+          unzip -q android-ndk-r20b-linux-x86_64.zip
+          echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r20b" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: ./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns
+
+      - name: Build
+        run: ./waf build
+
+      - name: Collect artifacts
+        if: always()
+        run: |
+          mkdir -p dist
+          find . -name '*.so' -not -path './.git/*' -print0 | xargs -0 -r -I{} cp {} dist/ || true
+          tar czf dist/engine-arm64.tar.gz -C dist . || true
+
+      - name: Upload engine libs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-arm64
+          path: dist/engine-arm64.tar.gz
+          if-no-files-found: ignore
+
+      - name: Upload logs on failure
+        if: failure()
+        run: |
+          tar czf logs.tar.gz $(find . -maxdepth 3 -name '*.log' -not -path './.git/*' | head -20) || true
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: logs.tar.gz
+          if-no-files-found: ignore
