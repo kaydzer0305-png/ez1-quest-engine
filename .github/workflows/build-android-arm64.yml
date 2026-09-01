@@ -45,7 +45,7 @@ jobs:
           javac -classpath "$PLAT/android.jar" -d work/classes $(find android/java thirdparty/SDL-src/android-project/app/src/main/java -name '*.java')
           "$BT/d8" --release --lib "$PLAT/android.jar" --output work $(find work/classes -name '*.class')
           "$BT/aapt2" link --manifest android/manifest/AndroidManifest.xml -I "$PLAT/android.jar" \
-              --min-sdk-version 24 --target-sdk-version 33 \
+              --min-sdk-version 24 --target-sdk-version 29 \
               -o work/base.apk
           ( cd work && zip -q base.apk classes.dex )
           ( cd apk && zip -qr ../work/base.apk lib )

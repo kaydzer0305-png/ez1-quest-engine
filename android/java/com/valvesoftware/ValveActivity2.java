@@ -36,10 +36,12 @@ public class ValveActivity2 extends SDLActivity
         try {
             String filesDir = getExternalFilesDir(null).getAbsolutePath();
             String libDir = getApplicationInfo().nativeLibraryDir;
+            // Reuse the content already on device from the SourceVR port (srceng layout)
+            String gameDir = "/storage/emulated/0/srceng/hl2";
             setenv("APP_DATA_PATH", filesDir, 1);
             setenv("NATIVE_LIB_DIR", libDir, 1);
-            setArgs("-game " + filesDir + "/hl2");
-            Log.i(TAG, "env set: APP_DATA_PATH=" + filesDir + " NATIVE_LIB_DIR=" + libDir);
+            setArgs("-game " + gameDir);
+            Log.i(TAG, "env set: APP_DATA_PATH=" + filesDir + " NATIVE_LIB_DIR=" + libDir + " game=" + gameDir);
         } catch (UnsatisfiedLinkError e) {
             Log.e(TAG, "native setup failed", e);
         }

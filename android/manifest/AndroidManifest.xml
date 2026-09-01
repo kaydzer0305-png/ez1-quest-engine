@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.valvesoftware"
+    package="com.ezquest.engine"
     android:versionCode="1"
     android:versionName="0.1">
 
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33"/>
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="29"/>
     <uses-feature android:glEsVersion="0x00030000" android:required="true"/>
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 
     <application
         android:label="Source Quest"
         android:hasCode="true"
+        android:requestLegacyExternalStorage="true"
         android:extractNativeLibs="true">
         <activity
             android:name="com.valvesoftware.ValveActivity2"
