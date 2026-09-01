@@ -246,7 +246,9 @@ class Android:
 					'-isystem', '%s/usr/include/' % (self.sysroot())
 				]
 
-		cflags += ['-I%s'%i for i in self.system_stl()]+['-DANDROID', '-D__ANDROID__']
+		if self.ndk_rev <= 17:
+			cflags += ['-I%s'%i for i in self.system_stl()]
+		cflags += ['-DANDROID', '-D__ANDROID__']
 
 		if cxx and not self.is_clang() and self.toolchain not in ['4.8','4.9']:
 			cflags += ['-fno-sized-deallocation']
