@@ -23,6 +23,17 @@ jobs:
       - name: Build
         run: ./waf build
 
+      - name: Build hidapi stub
+        # SDL's HIDDeviceManager shows a blocking error dialog when
+        # libhidapi.so is absent; the real SDL hidapi backend is not built
+        # by waf, so compile the no-op stub (Quest controllers come via
+        # OpenXR, not HID). See android/native/hidapi_stub.c.
+        run: |
+          CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          mkdir -p apk/lib/arm64-v8a
+          "$CC" -shared -fPIC -O1 android/native/hidapi_stub.c -o apk/lib/arm64-v8a/libhidapi.so
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" -d apk/lib/arm64-v8a/libhidapi.so | head -8
+
       - name: Collect native libraries
         run: |
           set -x
