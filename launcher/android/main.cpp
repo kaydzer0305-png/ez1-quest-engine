@@ -14,6 +14,7 @@ GNU General Public License for more details.
 
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include <dlfcn.h>
 #include <jni.h>
 #include <stdlib.h>
@@ -119,6 +120,99 @@ void android_property_print(const char *name)
 	Msg("prop %s=%s", name, strValue);
 }
 
+// ---------------------------------------------------------------------------
+// EZQuest Java bridge (slice D, part 1).
+//
+// Device state pushed from com.ezquest.engine.DeviceBridge, plus the
+// frame-loop heartbeat watched by the Java AnrWatchdog. Naming follows the
+// existing Java_com_valvesoftware_ValveActivity2_* functions above.
+//
+// Integration for the engine / OpenXR tree:
+//  * Call EZQuestSetEngineUp(1) once the frame loop is presenting; the Java
+//    bridge then reports "engine reachable" and push calls are accepted.
+//  * Call EZQuestWriteHeartbeat() once per presented frame; the Java
+//    AnrWatchdog reads $APP_DATA_PATH/diagnostics/heartbeat.bin.
+//  * Read g_ezBatteryPercent / g_ezBatteryCharging / g_ezThermalStatus
+//    (-1 = unknown) wherever the engine wants them (perf scaling, HUD).
+// ---------------------------------------------------------------------------
+
+static volatile int g_ezEngineUp = 0;
+static volatile int g_ezBatteryPercent = -1;
+static volatile int g_ezBatteryCharging = 0;
+static volatile int g_ezThermalStatus = -1;
+static volatile uint64_t g_ezHeartbeatCounter = 0;
+
+DLL_EXPORT void EZQuestSetEngineUp( int up )
+{
+	g_ezEngineUp = up ? 1 : 0;
+	Msg( "EZQuest bridge: engine up = %d\n", g_ezEngineUp );
+}
+
+DLL_EXPORT jboolean Java_com_ezquest_engine_DeviceBridge_nativeEngineUp( JNIEnv *env, jclass clazz )
+{
+	(void)env;
+	(void)clazz;
+	return g_ezEngineUp ? JNI_TRUE : JNI_FALSE;
+}
+
+DLL_EXPORT jboolean Java_com_ezquest_engine_DeviceBridge_nativePushBattery( JNIEnv *env, jclass clazz, jint percent, jboolean charging )
+{
+	(void)env;
+	(void)clazz;
+	g_ezBatteryPercent = (int)percent;
+	g_ezBatteryCharging = charging ? 1 : 0;
+	return g_ezEngineUp ? JNI_TRUE : JNI_FALSE;
+}
+
+DLL_EXPORT void Java_com_ezquest_engine_DeviceBridge_nativePushThermal( JNIEnv *env, jclass clazz, jint status )
+{
+	(void)env;
+	(void)clazz;
+	g_ezThermalStatus = (int)status;
+}
+
+DLL_EXPORT void EZQuestWriteHeartbeat()
+{
+	uint64_t counter = ++g_ezHeartbeatCounter;
+	const char *base = getenv( "APP_DATA_PATH" );
+	if ( !base || !base[0] )
+		return;
+	char path[2048];
+	snprintf( path, sizeof path, "%s/diagnostics/heartbeat.bin", base );
+	FILE *f = fopen( path, "wb" );
+	if ( !f )
+		return;
+	unsigned char buf[8];
+	int i;
+	for ( i = 0; i < 8; i++ )
+		buf[i] = (unsigned char)( counter >> ( i * 8 ) );
+	fwrite( buf, 1, sizeof buf, f );
+	fclose( f );
+}
+
+static void EZQuestLogEnv( const char *name )
+{
+	const char *value = getenv( name );
+	Msg( "env %s=%s\n", name, ( value && value[0] ) ? value : "(unset)" );
+}
+
+static void EZQuestLogEngineEnv()
+{
+	EZQuestLogEnv( "APP_DATA_PATH" );
+	EZQuestLogEnv( "NATIVE_LIB_DIR" );
+	EZQuestLogEnv( "APP_LIB_PATH" );
+	EZQuestLogEnv( "SOURCEVR_APK_PATH" );
+	EZQuestLogEnv( "SOURCEVR_GAME" );
+	EZQuestLogEnv( "VALVE_GAME_PATH" );
+	EZQuestLogEnv( "SOURCEVR_WRITE_GAME_PATH" );
+	EZQuestLogEnv( "SOURCEVR_SHARED_CONTENT_PATH" );
+	EZQuestLogEnv( "SOURCEVR_RUNTIME_GRAPH" );
+	EZQuestLogEnv( "SOURCEVR_USER_LAUNCH_ARGS_PATH" );
+	EZQuestLogEnv( "EXTRAS_VPK_PATH" );
+	EZQuestLogEnv( "VR_CONTENT_PATH" );
+	EZQuestLogEnv( "LANG" );
+}
+
 
 DLL_EXPORT int LauncherMainAndroid( int argc, char **argv )
 {
@@ -131,6 +225,8 @@ DLL_EXPORT int LauncherMainAndroid( int argc, char **argv )
 	android_property_print("ro.product.manufacturer");
 	android_property_print("ro.product.model");
 	android_property_print("ro.product.name");
+
+	EZQuestLogEngineEnv();
 
 	SetLauncherArgs();
 

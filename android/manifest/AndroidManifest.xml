@@ -44,6 +44,10 @@
         <meta-data
             android:name="com.oculus.supportedDevices"
             android:value="all"/>
+        <!-- Active game profile (hl2 today; flip to ez1 once the mod game code merges) -->
+        <meta-data
+            android:name="com.ezquest.engine.GAME_PROFILE"
+            android:value="hl2"/>
         <activity
             android:name="com.valvesoftware.ValveActivity2"
             android:label="Source Quest"
@@ -58,5 +62,37 @@
                 <category android:name="com.oculus.intent.category.VR"/>
             </intent-filter>
         </activity>
+        <!-- VR engine path (not the boot entry yet: native ANativeActivity_onCreate
+             lands with slice D; no MAIN/LAUNCHER filter until then) -->
+        <activity
+            android:name="com.ezquest.engine.EngineActivity"
+            android:label="Source Quest Engine"
+            android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density"
+            android:process=":engine"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.ezquest.engine.action.START_ENGINE"/>
+                <category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD"/>
+                <category android:name="com.oculus.intent.category.VR"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="launcher"/>
+        </activity>
+        <activity
+            android:name="com.ezquest.engine.RecoveryActivity"
+            android:label="Source Quest"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:process=":recovery"
+            android:exported="false"/>
+        <activity
+            android:name="com.ezquest.engine.ImportActivity"
+            android:label="Source Quest Content Import"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:exported="false"/>
     </application>
 </manifest>
