@@ -16,6 +16,7 @@ public final class ContentPresence {
     public final File commonRoot;
     public final List<DepotStatus> depots = new ArrayList<DepotStatus>();
     public boolean bootstrapPresent;
+    public final List<String> missingRequired = new ArrayList<String>();
     public String verdict = MISSING;
     public String headline = "";
 
@@ -63,7 +64,20 @@ public final class ContentPresence {
         }
         presence.bootstrapPresent = primaryRoot != null
                 && new File(primaryRoot, "gameinfo.txt").isFile();
-        if (allPresent && presence.bootstrapPresent) {
+        if (primaryRoot != null) {
+            for (String required : profile.requiredFiles) {
+                if (cancel != null) {
+                    cancel.throwIfCancelled();
+                }
+                if (!new File(primaryRoot, required).isFile()) {
+                    presence.missingRequired.add(required);
+                }
+            }
+        } else {
+            presence.missingRequired.addAll(profile.requiredFiles);
+        }
+        if (allPresent && presence.bootstrapPresent
+                && presence.missingRequired.isEmpty()) {
             presence.verdict = READY;
             presence.headline = profile.displayName + " folders are ready to launch.";
         } else {
@@ -106,6 +120,16 @@ public final class ContentPresence {
         }
         if (!bootstrapPresent) {
             return profile.gameDir + "/gameinfo.txt is missing";
+        }
+        if (!missingRequired.isEmpty()) {
+            StringBuilder sb = new StringBuilder(profile.gameDir + " is missing: ");
+            for (int i = 0; i < missingRequired.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append(missingRequired.get(i));
+            }
+            return sb.toString();
         }
         return "required content folders are unavailable";
     }

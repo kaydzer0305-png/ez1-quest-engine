@@ -30,14 +30,21 @@ public final class GameProfile {
 
     static {
         GameProfile hl2 = new GameProfile("hl2", "Half-Life 2",
-                Arrays.asList(ContentDepot.HL2, ContentDepot.PLATFORM));
+                Arrays.asList(ContentDepot.HL2, ContentDepot.PLATFORM),
+                // Proven on-device (Quest 3S bring-up): the engine quits
+                // without gameinfo.txt, and aborts in togl without the
+                // compiled shaders, which ship inside hl2_misc (the
+                // anniversary update moved shaders/ into VPKs).
+                Arrays.asList("gameinfo.txt", "hl2_misc_dir.vpk",
+                        "hl2_pak_dir.vpk"));
         HL2 = hl2;
         // Entropy: Zero 1 is an SDK-2013-based mod: its own depot plus the
         // Half-Life 2 / Episode depot chain it mounts content from.
         GameProfile ez1 = new GameProfile("ez1", "Entropy: Zero 1",
                 Arrays.asList(ContentDepot.EZ1, ContentDepot.EP2,
                         ContentDepot.EPISODIC, ContentDepot.HL2,
-                        ContentDepot.PLATFORM));
+                        ContentDepot.PLATFORM),
+                Arrays.asList("gameinfo.txt"));
         EZ1 = ez1;
         Map<String, GameProfile> byId = new LinkedHashMap<String, GameProfile>();
         byId.put(hl2.id, hl2);
@@ -54,13 +61,22 @@ public final class GameProfile {
     public final List<ContentDepot> depots;
     /** The depot the engine boots (depots.get(0)). */
     public final ContentDepot primary;
+    /**
+     * Files that must exist inside the primary depot root, e.g.
+     * gameinfo.txt and the VPKs carrying compiled shaders. A directory
+     * being present is not enough -- the Quest bring-up proved the
+     * engine quits/aborts without these exact files.
+     */
+    public final List<String> requiredFiles;
 
-    private GameProfile(String id, String displayName, List<ContentDepot> depots) {
+    private GameProfile(String id, String displayName, List<ContentDepot> depots,
+            List<String> requiredFiles) {
         this.id = id;
         this.displayName = displayName;
         this.depots = Collections.unmodifiableList(depots);
         this.primary = depots.get(0);
         this.gameDir = primary.dirName;
+        this.requiredFiles = Collections.unmodifiableList(requiredFiles);
     }
 
     public static GameProfile forId(String id) {

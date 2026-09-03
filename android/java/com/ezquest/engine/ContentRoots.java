@@ -74,15 +74,17 @@ public final class ContentRoots {
 
     /**
      * Best usable roots: shared layout when it is launch-ready, else the
-     * legacy layout when it has content, else null (caller routes to the
-     * importer).
+     * legacy layout when IT is launch-ready (depots + gameinfo.txt +
+     * required files, not just directories -- the Quest bring-up proved
+     * the engine quits/aborts on exact missing files), else null (caller
+     * routes to the importer).
      */
     public static ContentRoots resolve(Context context, GameProfile profile) {
         if (ContentPresence.check(SharedContent.commonRoot(), profile).readyToLaunch()) {
             return sharedDepot(context, profile);
         }
         ContentRoots legacy = legacySrceng(context, profile);
-        if (legacy.hasGameContent()) {
+        if (ContentPresence.check(legacy.contentRoot, profile).readyToLaunch()) {
             return legacy;
         }
         return null;

@@ -27,8 +27,19 @@ public final class ContentRouter {
         if (ContentRoots.resolve(activity, profile) != null) {
             return false;
         }
-        Log.i(TAG, "no usable " + profile.displayName
-                + " content; routing to importer");
+        // Resolve failed: name the exact missing files so the log (and the
+        // importer) can tell the user what to stage, e.g.
+        // "hl2 is missing: hl2_misc_dir.vpk".
+        try {
+            ContentRoots legacy = ContentRoots.legacySrceng(activity, profile);
+            ContentPresence presence =
+                    ContentPresence.check(legacy.contentRoot, profile);
+            Log.i(TAG, "content not launch-ready (" + presence.problem()
+                    + "); routing to importer");
+        } catch (Exception e) {
+            Log.i(TAG, "no usable " + profile.displayName
+                    + " content; routing to importer (" + e + ")");
+        }
         try {
             activity.startActivity(ImportActivity.intentFor(activity));
         } catch (Exception e) {
