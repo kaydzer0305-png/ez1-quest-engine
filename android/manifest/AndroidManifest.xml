@@ -48,19 +48,31 @@
         <meta-data
             android:name="com.ezquest.engine.GAME_PROFILE"
             android:value="hl2"/>
+        <!-- 2D bootstrap entry (mirrors SourceVR's LauncherActivity): draws
+             immediately so the system interstitial clears and focus flows,
+             then starts the engine explicitly. No VR categories, like the
+             reference. -->
         <activity
-            android:name="com.valvesoftware.ValveActivity2"
+            android:name="com.ezquest.engine.LauncherActivity"
             android:label="Source Quest"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="landscape"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="org.khronos.openxr.intent.category.IMMERSIVE_HMD"/>
-                <category android:name="com.oculus.intent.category.VR"/>
             </intent-filter>
+        </activity>
+        <!-- Flat engine: explicit-only entry, started by LauncherActivity
+             once the app holds focus (see LauncherActivity). -->
+        <activity
+            android:name="com.valvesoftware.ValveActivity2"
+            android:label="Source Quest"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density"
+            android:exported="false">
         </activity>
         <!-- VR engine path (not the boot entry yet: native ANativeActivity_onCreate
              lands with slice D; no MAIN/LAUNCHER filter until then) -->
