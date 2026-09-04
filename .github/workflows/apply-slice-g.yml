@@ -1,0 +1,30 @@
+name: apply-slice-g
+on:
+  workflow_dispatch:
+  push:
+    branches: [ quest-vr-slice-g-stereo ]
+    paths:
+      - 'scripts/apply-slice-g.sh'
+      - '.github/workflows/apply-slice-g.yml'
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: quest-vr-slice-g-stereo
+      - name: Apply sdlmgr/sys_dll2 patches
+        run: bash scripts/apply-slice-g.sh
+      - name: Commit if dirty
+        run: |
+          git config user.name kaydzer0305-png
+          git config user.email kaydzer0305@gmail.com
+          git add appframework/sdlmgr.cpp engine/sys_dll2.cpp
+          if git diff --cached --quiet; then
+            echo no changes
+          else
+            git commit -m "Slice G: wire ShowPixels stereo skip + Android VR Activate"
+            git push
+          fi
