@@ -1,0 +1,56 @@
+--- a/launcher/android/vr_main.cpp
++++ b/launcher/android/vr_main.cpp
+@@ -43,6 +43,9 @@
+ #include <sys/syscall.h>
+ 
+ #include "vr.h"
++#include "ezquest_vr_engine.h"
++#include "vr_input.h"
++#include "ezquest_vr_present.h"
+ 
+ // Engine bridge (launcher/android/main.cpp): heartbeat file + Java
+ // DeviceBridge "engine up" state. Called once the compositor presents.
+@@ -690,6 +693,8 @@
+ 
+ static void EzTeardown( void )
+ {
++        EZQuestVrPresentShutdown();
++        EzVrInputShutdown();
+         EzVrSceneShutdown();
+ 
+         for ( uint32_t eye = 0; eye < 2; eye++ )
+@@ -734,6 +739,17 @@
+                 EzTeardown();
+                 return;
+         }
++
++        {
++                char ierr[256];
++                if ( !EzVrInputInit( g_app.instance, g_app.session, g_app.localSpace,
++                                ierr, sizeof ierr ) )
++                {
++                        EZLOG( "input init skipped: %s", ierr );
++                }
++        }
++
++        EZQuestVrPresentInit( g_app.swapchainWidth, g_app.swapchainHeight );
+ 
+         // Wrap swapchain images in FBOs and build the diagnostic scene.
+         GLuint *images = (GLuint * )malloc( sizeof( GLuint ) * 2 * g_app.swapchainLength );
+@@ -823,6 +839,8 @@
+                         EzSetFailedFmt( "xrBeginFrame failed" );
+                         break;
+                 }
++
++                EzVrInputSync( frameState.predictedDisplayTime );
+ 
+                 if ( frameState.shouldRender )
+                 {
+@@ -837,6 +855,7 @@
+                                 EZLOG( "first frame presented; reporting engine up" );
+                                 EZQuestSetEngineUp( 1 );
+                                 EzSetStatus( EZ_XR_RUNNING );
++                                EZQuestVrOnFirstPresent();
+                         }
+                         if ( ( frameIndex & 7 ) == 0 )
+                         {
