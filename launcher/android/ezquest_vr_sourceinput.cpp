@@ -33,6 +33,8 @@ int g_logged = 0;
 
 int g_fwd = 0, g_back = 0, g_ml = 0, g_mr = 0, g_speed = 0;
 int g_atk = 0, g_atk2 = 0, g_jump = 0, g_reload = 0, g_use = 0, g_menu = 0;
+int g_weap = 0;
+int g_snapLatched = 0;
 
 static int EnvTruthy( const char *name, int deflt )
 {
@@ -166,7 +168,17 @@ void EZQuestVrSourceInputSync( void )
         Hold( &g_back, ly < -dead, "+back\n",    "-back\n" );
         Hold( &g_ml,   lx < -dead, "+moveleft\n", "-moveleft\n" );
         Hold( &g_mr,   lx >  dead, "+moveright\n", "-moveright\n" );
-        Hold( &g_speed, L.stickClick || R.stickClick, "+speed\n", "-speed\n" );
+        Hold( &g_speed, L.stickClick, "+speed\n", "-speed\n" );
+
+        if ( R.stickClick && !g_weap )
+        {
+                SendCmd( "invnext\n" );
+                g_weap = 1;
+        }
+        else if ( !R.stickClick )
+        {
+                g_weap = 0;
+        }
 
         const int fire = ( R.triggerClick || R.trigger > 0.7f || L.triggerClick );
         Hold( &g_atk, fire, "+attack\n", "-attack\n" );
@@ -179,8 +191,32 @@ void EZQuestVrSourceInputSync( void )
         Hold( &g_use, L.gripClick && L.triggerClick, "+use\n", "-use\n" );
         Hold( &g_menu, R.menuButton || L.menuButton, "cancelselect\n", "" );
 
-        if ( fabsf( rx ) > 0.12f )
+        if ( EnvTruthy( "EZQUEST_VR_SNAP_TURN", 1 ) )
+        {
+                const float gate = 0.68f;
+                if ( fabsf( rx ) > gate && !g_snapLatched )
+                {
+                        float deg = 30.f;
+                        const char *ds = getenv( "EZQUEST_VR_SNAP_DEGREES" );
+                        if ( ds && ds[0] )
+                                deg = (float)atof( ds );
+                        if ( deg < 15.f ) deg = 15.f;
+                        if ( deg > 90.f ) deg = 90.f;
+                        /* m_yaw default 0.022 → mouse ticks = deg / 0.022
+                           PostMouseYaw multiplies by 220, so yawDelta = ticks/220 */
+                        const float ticks = deg / 0.022f;
+                        PostMouseYaw( ( rx > 0.f ? ticks : -ticks ) / 220.f );
+                        g_snapLatched = 1;
+                }
+                else if ( fabsf( rx ) < 0.35f )
+                {
+                        g_snapLatched = 0;
+                }
+        }
+        else if ( fabsf( rx ) > 0.12f )
+        {
                 PostMouseYaw( rx );
+        }
 
         if ( !g_logged )
         {

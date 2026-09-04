@@ -20,6 +20,10 @@ native half of the `EngineActivity` boot path:
 7. Slice G: per-eye Source render targets + stereo present hook.
 8. Slice H1: `CEzQuestSourceVR::Activate()` allocates `_rt_ezquest_eye_*`
    if `InitWellKnownRenderTargets` ran before `g_pSourceVR` was live.
+9. Slice H2: `DoDistortionProcessing` re-binds the eye RT before
+   `EZQuestVrSubmitEngineEyeFromCurrentFbo` so PostProcess does not blit
+   a popped/mono backbuffer.
+10. Slice H3: comfort snap-turn + weapon cycle on Touch (see knobs).
 
 ## Boot flow (BOOT_MODE safe flip)
 
@@ -37,6 +41,24 @@ LauncherActivity
 - `EZQUEST_VR_STUB_HOOK=1` teal/purple stub hook after first present
 - `EZQUEST_VR_TRY_ENGINE` defaults **on**. Set `=0` to keep the diagnostic grid.
 - `EZQUEST_VR_SOURCE_INPUT=0` disables Quest Touch to Source command mapping
+- `EZQUEST_VR_SNAP_TURN` defaults **on**. Right-stick flick snaps yaw
+  (`EZQUEST_VR_SNAP_DEGREES`, default 30). Set `=0` for smooth stick look.
+- `EZQUEST_VR_SNAP_DEGREES` (15-90, default 30)
+
+## Touch → Source map
+
+| Control | Command |
+| --- | --- |
+| Left stick | `+forward/+back/+moveleft/+moveright` |
+| Left stick click | `+speed` |
+| Right stick X | snap-turn or smooth yaw |
+| Right stick click | `invnext` |
+| Triggers | `+attack` |
+| Grips | `+attack2` |
+| A / X | `+jump` |
+| B / Y | `+reload` |
+| Left grip+trigger | `+use` |
+| Menu | `cancelselect` |
 
 ## Engine seam
 
@@ -53,17 +75,12 @@ int EZQuestVrStereoEyesReady(void);
 The hook must not call `xr*` functions.
 
 Remaining work:
-1. Headset test of dual-eye RTs (`_rt_ezquest_eye_left/right`). A VR-aware
-   HL2 client (`supportsvr` + `-vr`, which Android now forces) should render
-   each eye into those targets and call `DoDistortionProcessing`, which
-   publishes the current FBO to the XR swapchain. Without a VR view loop the
-   present path still blits the mono ShowPixels buffer to both eyes, or
-   splits a side-by-side backbuffer. Logcat after Activate should show
-   `EZQuest-SourceVR: RT _rt_ezquest_eye_left` (slice H1).
-2. If RTs allocate but the headset is still mono, next is slice H2: submit
-   the correct per-eye texture from `DoDistortionProcessing` instead of
-   relying on the currently bound READ FBO.
-3. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
+1. Headset test of dual-eye RTs + H2 submit. Logcat should show
+   `EZQuest-SourceVR: RT _rt_ezquest_eye_left` (H1) and
+   `submit eye=0/1 via bound RT … (slice H2)`. Expect true IPD stereo
+   once the HL2 client VR view loop is running (`UseVR()` + `PostProcessFrame`).
+2. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
+3. Performance: fixed foveation / further `EZQUEST_XR_RES_SCALE` tuning.
 
 ## Build
 
