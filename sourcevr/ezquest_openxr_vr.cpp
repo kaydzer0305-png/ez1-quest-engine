@@ -225,13 +225,42 @@ public:
                 w = EyeW();
                 h = EyeH();
         }
-        virtual bool Activate() { m_active = m_force = true; EZLOG("Activate"); return true; }
+        // Slice H1 (#5): InitWellKnownRenderTargets may have run before
+        // g_pSourceVR existed, so CreateRenderTargets never ran. Allocate
+        // per-eye RTs here so Android Activate always leaves them ready.
+        virtual bool Activate()
+        {
+                m_active = m_force = true;
+                EZLOG("Activate");
+                EnsureEyeRenderTargets();
+                return true;
+        }
         virtual void Deactivate() { m_active = false; }
         virtual bool ShouldForceVRMode() { return true; }
         virtual void SetShouldForceVRMode() { m_force = true; }
 private:
         int EyeW() const { return m_snap.width ? (int)m_snap.width : 1440; }
         int EyeH() const { return m_snap.height ? (int)m_snap.height : 1440; }
+        void EnsureEyeRenderTargets()
+        {
+                if ( m_rtColor[0] )
+                {
+                        EZLOG( "Activate: per-eye RTs already present (%dx%d)", m_rtW, m_rtH );
+                        return;
+                }
+                IMaterialSystem *ms = materials;
+                if ( !ms )
+                {
+                        EZERR( "Activate: materials null — defer CreateRenderTargets to mat_reset / InitWellKnownRenderTargets" );
+                        return;
+                }
+                EZLOG( "Activate: allocating per-eye RTs (slice H1)" );
+                ms->BeginRenderTargetAllocation();
+                CreateRenderTargets( ms );
+                ms->EndRenderTargetAllocation();
+                if ( !m_rtColor[0] )
+                        EZERR( "Activate: CreateRenderTargets left color RTs null" );
+        }
         void Resolve()
         {
                 if (!m_copy)
