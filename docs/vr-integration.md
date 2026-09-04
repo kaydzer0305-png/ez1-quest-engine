@@ -17,6 +17,7 @@ native half of the `EngineActivity` boot path:
 5. Slice E input: `ezquest` action set with Quest Touch bindings.
    Snapshot via `EzVrInputGetState()`. Init failure is non-fatal.
 6. Slice F: tracking snapshot + Source `+forward`/`+attack` mapper.
+7. Slice G: per-eye Source render targets + stereo present hook.
 
 ## Boot flow (BOOT_MODE safe flip)
 
@@ -43,13 +44,19 @@ XrSession EZQuestVrSession(void);
 int EZQuestVrHeadViews(XrView outViews[2], XrSpace *outSpace);
 int EzVrInputGetState(EzVrInputState *out);
 int EZQuestVrCopyTracking(EzVrTrackingSnapshot *out);
+int EZQuestVrSubmitEngineEyeFromCurrentFbo(int eye, int width, int height);
+int EZQuestVrStereoEyesReady(void);
 ```
 
 The hook must not call `xr*` functions.
 
 Remaining work:
-1. True per-eye Source render targets (sourcevr now supplies pose/proj; engine
-   still presents a single ShowPixels buffer that we blit to both eyes).
+1. Headset test of dual-eye RTs (`_rt_ezquest_eye_left/right`). A VR-aware
+   HL2 client (`supportsvr` + `-vr`, which Android now forces) should render
+   each eye into those targets and call `DoDistortionProcessing`, which
+   publishes the current FBO to the XR swapchain. Without a VR view loop the
+   present path still blits the mono ShowPixels buffer to both eyes, or
+   splits a side-by-side backbuffer.
 2. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
 
 ## Build
@@ -57,7 +64,7 @@ Remaining work:
 CI unpacks Khronos `openxr_loader_for_android` 1.0.34 into `external/openxr/`.
 `launcher/wscript` compiles the XR compositor, present hook, tracking snapshot,
 and Source input adapter on Android. `sourcevr/` builds an OpenXR-backed
-`ISourceVirtualReality` module that reads that snapshot.
+`ISourceVirtualReality` module that reads that snapshot and allocates per-eye RTs.
 
 ## Logcat tags
 

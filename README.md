@@ -17,9 +17,9 @@ Current status:
 - ✅ Immersive VR bootstrap (slice D): OpenXR session → GLES swapchain → compositor loop.
 - ✅ Public-tree engine seam: `EZQuestVrSetRenderHook()` + stub hook / gated `LauncherMain`.
 - ✅ Slice E input scaffolding: Quest Touch action set (`launcher/android/vr_input.cpp`).
-- ⚠️ `launcher/android/vr_main.cpp` was wiped to an empty blob on master. Restore it with
-  `scripts/restore-vr-main.sh` (checks out slice D and applies `scripts/vr_main_slice_e.patch`).
-- 🔬 Remaining: togles → XR FBO render path, Source input mapping, EZ1 game-code merge.
+- ✅ `vr_main.cpp` restored; ShowPixels publishes into XR swapchain FBOs.
+- ✅ Slice G: per-eye Source RTs (`sourcevr` `CreateRenderTargets`) + stereo present hook.
+- 🔬 Remaining: headset verify stereo/input, then EZ1 game-code merge.
 
 ## Roadmap
 
