@@ -18,6 +18,8 @@ native half of the `EngineActivity` boot path:
    Snapshot via `EzVrInputGetState()`. Init failure is non-fatal.
 6. Slice F: tracking snapshot + Source `+forward`/`+attack` mapper.
 7. Slice G: per-eye Source render targets + stereo present hook.
+8. Slice H1: `CEzQuestSourceVR::Activate()` allocates `_rt_ezquest_eye_*`
+   if `InitWellKnownRenderTargets` ran before `g_pSourceVR` was live.
 
 ## Boot flow (BOOT_MODE safe flip)
 
@@ -56,8 +58,12 @@ Remaining work:
    each eye into those targets and call `DoDistortionProcessing`, which
    publishes the current FBO to the XR swapchain. Without a VR view loop the
    present path still blits the mono ShowPixels buffer to both eyes, or
-   splits a side-by-side backbuffer.
-2. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
+   splits a side-by-side backbuffer. Logcat after Activate should show
+   `EZQuest-SourceVR: RT _rt_ezquest_eye_left` (slice H1).
+2. If RTs allocate but the headset is still mono, next is slice H2: submit
+   the correct per-eye texture from `DoDistortionProcessing` instead of
+   relying on the currently bound READ FBO.
+3. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
 
 ## Build
 
