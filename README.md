@@ -18,14 +18,18 @@ Current status:
 - ✅ Public-tree engine seam: `EZQuestVrSetRenderHook()` + stub hook / gated `LauncherMain`.
 - ✅ Slice E input scaffolding: Quest Touch action set (`launcher/android/vr_input.cpp`).
 - ✅ `vr_main.cpp` restored; ShowPixels publishes into XR swapchain FBOs.
+- ✅ Slice F: Quest Touch → Source `+forward`/`+attack` + tracking snapshot.
 - ✅ Slice G: per-eye Source RTs (`sourcevr` `CreateRenderTargets`) + stereo present hook.
+- ✅ Slice H1: allocate `_rt_ezquest_eye_*` on `Activate()` if the matsys window was missed.
+- ✅ Slice H2: re-bind the eye RT before XR submit so PostProcess cannot flatten stereo.
+- ✅ Slice H3: snap-turn + `invnext` on right stick click.
 - 🔬 Remaining: headset verify stereo/input, then EZ1 game-code merge.
 
 ## Roadmap
 
-1. Base HL2 running **in-headset in VR** — compositor done; engine render path is next.
+1. Headset-verify HL2 **in-headset stereo** (H1/H2 logcat + IPD check).
 2. Merge **Entropy: Zero 1** game code (SDK-2013-based) into the engine build.
-3. Comfort options + performance (fixed foveation; `EZQUEST_XR_RES_SCALE` already exists).
+3. Performance pass (fixed foveation; `EZQUEST_XR_RES_SCALE` already exists).
 
 ## How we build
 
