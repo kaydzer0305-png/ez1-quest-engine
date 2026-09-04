@@ -1,0 +1,43 @@
+#! /usr/bin/env python
+# encoding: utf-8
+
+top = '.'
+PROJECT_NAME = 'sourcevr'
+
+def options(opt):
+        return
+
+def configure(conf):
+        return
+
+def build(bld):
+        if bld.env.DEST_OS != 'android':
+                return
+
+        source = [
+                'ezquest_openxr_vr.cpp',
+                '../public/tier0/memoverride.cpp'
+        ]
+
+        includes = [
+                '.',
+                '../public',
+                '../public/tier0',
+                '../public/tier1',
+                '../common'
+        ]
+
+        libs = ['tier0', 'tier1', 'tier2', 'tier3', 'mathlib', 'appframework', 'vstdlib']
+
+        bld.shlib(
+                source   = source,
+                target   = PROJECT_NAME,
+                name     = PROJECT_NAME,
+                features = 'c cxx',
+                includes = includes,
+                defines  = ['SOURCEVR_DLL'],
+                use      = libs,
+                install_path = bld.env.LIBDIR,
+                subsystem = bld.env.MSVC_SUBSYSTEM,
+                idx      = bld.get_taskgen_count()
+        )
