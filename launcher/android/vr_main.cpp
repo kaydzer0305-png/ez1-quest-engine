@@ -46,6 +46,8 @@ GNU General Public License for more details.
 #include "ezquest_vr_engine.h"
 #include "vr_input.h"
 #include "ezquest_vr_present.h"
+#include "ezquest_vr_tracking.h"
+#include "ezquest_vr_sourceinput.h"
 
 // Engine bridge (launcher/android/main.cpp): heartbeat file + Java
 // DeviceBridge "engine up" state. Called once the compositor presents.
@@ -636,6 +638,8 @@ static bool EzRenderFrame( const XrFrameState &frameState )
                 target.colorImage = EzVrSceneImageForEye( eye, imageIndex );
         }
 
+        EZQuestVrPublishEyes( eyes, 2, g_app.views );
+
         // Render through the seam (engine) or the built-in scene.
         if ( g_renderHook )
         {
@@ -841,6 +845,7 @@ static void EzVrRun( JNIEnv *env )
                 }
 
                 EzVrInputSync( frameState.predictedDisplayTime );
+                EZQuestVrSourceInputSync();
 
                 if ( frameState.shouldRender )
                 {

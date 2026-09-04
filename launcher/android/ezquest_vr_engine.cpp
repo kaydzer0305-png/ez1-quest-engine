@@ -281,9 +281,9 @@ void EZQuestVrOnFirstPresent( void )
                 return;
         g_bootRequested = 1;
 
-        const int wantStub = EnvTruthy( "EZQUEST_VR_STUB_HOOK" ) ||
-                             EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );
-        const int wantEngine = EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );
+        const int wantEngine = !getenv( "EZQUEST_VR_TRY_ENGINE" ) ||
+                               EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );
+        const int wantStub = EnvTruthy( "EZQUEST_VR_STUB_HOOK" );
 
         EZLOG( "first present: stub=%d try_engine=%d", wantStub, wantEngine );
 
