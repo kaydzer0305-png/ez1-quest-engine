@@ -16,6 +16,7 @@ native half of the `EngineActivity` boot path:
 4. Java status contract + heartbeat on first present.
 5. Slice E input: `ezquest` action set with Quest Touch bindings.
    Snapshot via `EzVrInputGetState()`. Init failure is non-fatal.
+6. Slice F: tracking snapshot + Source `+forward`/`+attack` mapper.
 
 ## Boot flow (BOOT_MODE safe flip)
 
@@ -31,7 +32,8 @@ LauncherActivity
 
 - `EZQUEST_XR_RES_SCALE` (0.25-2.0, default 1.0)
 - `EZQUEST_VR_STUB_HOOK=1` teal/purple stub hook after first present
-- `EZQUEST_VR_TRY_ENGINE=1` spawn `LauncherMainAndroid()` (scaffolding only)
+- `EZQUEST_VR_TRY_ENGINE` defaults **on**. Set `=0` to keep the diagnostic grid.
+- `EZQUEST_VR_SOURCE_INPUT=0` disables Quest Touch to Source command mapping
 
 ## Engine seam
 
@@ -40,22 +42,23 @@ void EZQuestVrSetRenderHook(EzVrRenderFn fn, void *userdata);
 XrSession EZQuestVrSession(void);
 int EZQuestVrHeadViews(XrView outViews[2], XrSpace *outSpace);
 int EzVrInputGetState(EzVrInputState *out);
+int EZQuestVrCopyTracking(EzVrTrackingSnapshot *out);
 ```
 
 The hook must not call `xr*` functions.
 
 Remaining work:
-1. Start LauncherMain without SDL owning a window; reuse XR EGL context.
-2. Point togles at `EzVrEyeFrame.fbo` with per-eye view/proj.
-3. Feed `EzVrInputState` into Source input.
-4. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
+1. True per-eye Source render targets (sourcevr now supplies pose/proj; engine
+   still presents a single ShowPixels buffer that we blit to both eyes).
+2. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
 
 ## Build
 
 CI unpacks Khronos `openxr_loader_for_android` 1.0.34 into `external/openxr/`.
-`launcher/wscript` compiles `vr_main.cpp`, `vr_scene.cpp`, `vr_input.cpp`,
-and `ezquest_vr_engine.cpp` on Android only.
+`launcher/wscript` compiles the XR compositor, present hook, tracking snapshot,
+and Source input adapter on Android. `sourcevr/` builds an OpenXR-backed
+`ISourceVirtualReality` module that reads that snapshot.
 
 ## Logcat tags
 
-`EZQuest-VR`, `EZQuest-VR-Input`, `EZQuest-VR-Engine`, `EZQuest-Engine`.
+`EZQuest-VR`, `EZQuest-VR-Input`, `EZQuest-VR-Engine`, `EZQuest-VR-Present`, `EZQuest-SourceVR`.
