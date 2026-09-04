@@ -648,5 +648,7 @@ def build(bld):
 			projects['game'] += ['togles']
 		elif bld.env.GL:
 			projects['game'] += ['togl']
+		if bld.env.DEST_OS == 'android':
+			projects['game'] += ['sourcevr']
 
 		bld.add_subproject(projects['game'])

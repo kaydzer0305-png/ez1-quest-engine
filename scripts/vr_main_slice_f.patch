@@ -1,0 +1,28 @@
+--- a/launcher/android/vr_main.cpp
++++ b/launcher/android/vr_main.cpp
+@@ -46,6 +46,8 @@
+ #include "ezquest_vr_engine.h"
+ #include "vr_input.h"
+ #include "ezquest_vr_present.h"
++#include "ezquest_vr_tracking.h"
++#include "ezquest_vr_sourceinput.h"
+ 
+ // Engine bridge (launcher/android/main.cpp): heartbeat file + Java
+ // DeviceBridge "engine up" state. Called once the compositor presents.
+@@ -635,6 +637,8 @@
+                 target.fbo = EzVrSceneFboForEye( eye, imageIndex );
+                 target.colorImage = EzVrSceneImageForEye( eye, imageIndex );
+         }
++
++        EZQuestVrPublishEyes( eyes, 2, g_app.views );
+ 
+         // Render through the seam (engine) or the built-in scene.
+         if ( g_renderHook )
+@@ -841,6 +845,7 @@
+                 }
+ 
+                 EzVrInputSync( frameState.predictedDisplayTime );
++                EZQuestVrSourceInputSync();
+ 
+                 if ( frameState.shouldRender )
+                 {

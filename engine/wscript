@@ -86,6 +86,7 @@ def build(bld):
 		'clockdriftmgr.cpp',
 		'cl_check_process.cpp',	
 		'cmd.cpp',
+		'ezquest_cbuf_export.cpp',
 		'cmodel.cpp',
 		'cmodel_bsp.cpp',
 		'cmodel_disp.cpp',

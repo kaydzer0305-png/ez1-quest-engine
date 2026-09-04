@@ -1,0 +1,66 @@
+name: apply-slice-f
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [slice-f-stereo-input]
+    paths:
+      - '.github/workflows/apply-slice-f.yml'
+      - 'scripts/vr_main_slice_f.patch'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/slice-f-stereo-input'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: slice-f-stereo-input
+
+      - name: Wire vr_main, wscripts, engine boot default
+        run: |
+          set -euo pipefail
+          git apply --check scripts/vr_main_slice_f.patch
+          git apply scripts/vr_main_slice_f.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('engine/wscript')
+          t = p.read_text()
+          if "ezquest_cbuf_export.cpp" not in t:
+              t = t.replace("\t\t'cmd.cpp',\n", "\t\t'cmd.cpp',\n\t\t'ezquest_cbuf_export.cpp',\n", 1)
+              p.write_text(t)
+              print('engine/wscript patched')
+          p = Path('wscript')
+          t = p.read_text()
+          needle = "\t\tif bld.env.DEST_OS == 'android':\n\t\t\tprojects['game'] += ['sourcevr']\n"
+          if "projects['game'] += ['sourcevr']" not in t:
+              t = t.replace(
+                  "\t\telif bld.env.GL:\n\t\t\tprojects['game'] += ['togl']\n\n\t\tbld.add_subproject(projects['game'])\n",
+                  "\t\telif bld.env.GL:\n\t\t\tprojects['game'] += ['togl']\n\t\tif bld.env.DEST_OS == 'android':\n\t\t\tprojects['game'] += ['sourcevr']\n\n\t\tbld.add_subproject(projects['game'])\n",
+                  1)
+              p.write_text(t)
+              print('root wscript patched')
+          p = Path('launcher/android/ezquest_vr_engine.cpp')
+          t = p.read_text()
+          old = '''        const int wantStub = EnvTruthy( "EZQUEST_VR_STUB_HOOK" ) ||\n                             EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );\n        const int wantEngine = EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );'''
+          new = '''        const int wantEngine = !getenv( "EZQUEST_VR_TRY_ENGINE" ) ||\n                               EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );\n        const int wantStub = EnvTruthy( "EZQUEST_VR_STUB_HOOK" );'''
+          if old in t:
+              p.write_text(t.replace(old, new, 1))
+              print('first-present default patched')
+          PY
+          grep -n "EZQuestVrPublishEyes\|EZQuestVrSourceInputSync" launcher/android/vr_main.cpp
+
+      - name: Commit wiring
+        run: |
+          git config user.name "kaydzer0305-png"
+          git config user.email "kaydzer0305@gmail.com"
+          git add launcher/android/vr_main.cpp engine/wscript wscript launcher/android/ezquest_vr_engine.cpp
+          if git diff --cached --quiet; then
+            echo nothing to commit
+            exit 0
+          fi
+          git commit -m "Wire slice F tracking/input call sites and Android sourcevr build"
+          git push origin slice-f-stereo-input
