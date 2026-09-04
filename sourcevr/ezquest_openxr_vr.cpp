@@ -84,6 +84,7 @@ public:
                 m_rtColor[0] = m_rtColor[1] = NULL;
                 m_rtDepth[0] = m_rtDepth[1] = NULL;
                 m_rtW = m_rtH = 0;
+                m_loggedSubmit[0] = m_loggedSubmit[1] = false;
         }
         virtual bool Connect( CreateInterfaceFn factory ) { BaseClass::Connect(factory); Resolve(); return true; }
         virtual void Disconnect() { BaseClass::Disconnect(); }
@@ -118,17 +119,36 @@ public:
                 if (w) *w = ew;
                 if (h) *h = eh;
         }
+        // Slice H2 (#5): PostProcessFrame often runs after RenderView has
+        // already popped the eye RT, so FromCurrentFbo would blit the wrong
+        // (or mono) buffer. Re-bind this eye's color RT so the present path
+        // reads the stereo target that was just rendered.
         virtual bool DoDistortionProcessing( VREye eye )
         {
                 Resolve();
                 Refresh();
+                EnsureEyeRenderTargets();
+                if ( !m_submitEye )
+                        return false;
+
                 const int i = eye==VREye_Right ? 1 : 0;
-                if ( m_submitEye )
+                ITexture *color = m_rtColor[i];
+                if ( color && materials )
                 {
-                        m_submitEye( i, EyeW(), EyeH() );
-                        return true;
+                        CMatRenderContextPtr pRenderContext( materials );
+                        pRenderContext->PushRenderTargetAndViewport( color, m_rtDepth[i] );
+                        pRenderContext->Flush( false );
+                        const int ok = m_submitEye( i, EyeW(), EyeH() );
+                        pRenderContext->PopRenderTargetAndViewport();
+                        if ( ok && !m_loggedSubmit[i] )
+                        {
+                                EZLOG( "submit eye=%d via bound RT %s (slice H2)", i, color->GetName() );
+                                m_loggedSubmit[i] = true;
+                        }
+                        return ok != 0;
                 }
-                return false;
+
+                return m_submitEye( i, EyeW(), EyeH() ) != 0;
         }
         virtual bool CompositeHud( VREye, float[4], bool, bool, bool ) { return false; }
         virtual VMatrix GetMideyePose()
@@ -244,22 +264,19 @@ private:
         void EnsureEyeRenderTargets()
         {
                 if ( m_rtColor[0] )
-                {
-                        EZLOG( "Activate: per-eye RTs already present (%dx%d)", m_rtW, m_rtH );
                         return;
-                }
                 IMaterialSystem *ms = materials;
                 if ( !ms )
                 {
-                        EZERR( "Activate: materials null — defer CreateRenderTargets to mat_reset / InitWellKnownRenderTargets" );
+                        EZERR( "EnsureEyeRenderTargets: materials null — defer CreateRenderTargets to mat_reset / InitWellKnownRenderTargets" );
                         return;
                 }
-                EZLOG( "Activate: allocating per-eye RTs (slice H1)" );
+                EZLOG( "allocating per-eye RTs (slice H1)" );
                 ms->BeginRenderTargetAllocation();
                 CreateRenderTargets( ms );
                 ms->EndRenderTargetAllocation();
                 if ( !m_rtColor[0] )
-                        EZERR( "Activate: CreateRenderTargets left color RTs null" );
+                        EZERR( "CreateRenderTargets left color RTs null" );
         }
         void Resolve()
         {
@@ -290,6 +307,7 @@ private:
         ITexture *m_rtColor[2];
         ITexture *m_rtDepth[2];
         int m_rtW, m_rtH;
+        bool m_loggedSubmit[2];
 };
 
 static CEzQuestSourceVR g_SourceVR;
