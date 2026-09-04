@@ -1,0 +1,54 @@
+name: apply-present-hooks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [apply-present-hooks]
+    paths:
+      - '.github/workflows/apply-present-hooks.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/apply-present-hooks'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: apply-present-hooks
+
+      - name: Restore vr_main and apply present patches
+        run: |
+          set -euo pipefail
+          GOOD=a06319ee8c923cea0f41abda224356086d4df235
+          if [ ! -s launcher/android/vr_main.cpp ]; then
+            echo "vr_main.cpp is empty; restoring from $GOOD"
+            git checkout "$GOOD" -- launcher/android/vr_main.cpp 2>/dev/null || \
+              curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GOOD}/launcher/android/vr_main.cpp" \
+                -o launcher/android/vr_main.cpp
+          fi
+          test -s launcher/android/vr_main.cpp
+          git apply --check scripts/vr_main_present.patch
+          git apply scripts/vr_main_present.patch
+          git apply --check scripts/sdlmgr_xr_present.patch
+          git apply scripts/sdlmgr_xr_present.patch
+          echo "patched sizes:"
+          wc -c launcher/android/vr_main.cpp appframework/sdlmgr.cpp
+          grep -n "EZQuestVrPresentInit\|EZQuestVrSubmitEngineFrame\|EZQuestVrBindEngineContext\|EzVrInputInit" \
+            launcher/android/vr_main.cpp appframework/sdlmgr.cpp
+
+      - name: Commit restored sources
+        run: |
+          set -euo pipefail
+          git config user.name "kaydzer0305-png"
+          git config user.email "kaydzer0305@gmail.com"
+          git add launcher/android/vr_main.cpp appframework/sdlmgr.cpp
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git commit -m "Restore vr_main and wire ShowPixels into XR FBOs"
+          git push origin apply-present-hooks
