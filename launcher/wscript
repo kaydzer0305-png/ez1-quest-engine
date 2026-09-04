@@ -42,7 +42,9 @@ def build(bld):
                         'android/vr_scene.cpp',
                         'android/vr_input.cpp',
                         'android/ezquest_vr_engine.cpp',
-                        'android/ezquest_vr_present.cpp'
+                        'android/ezquest_vr_present.cpp',
+                        'android/ezquest_vr_tracking.cpp',
+                        'android/ezquest_vr_sourceinput.cpp'
                 ]
 
         includes = [
