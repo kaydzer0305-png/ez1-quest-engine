@@ -22,6 +22,11 @@
 #ifdef TOGLES
 #include <EGL/egl.h>
 #endif
+#if defined( ANDROID )
+extern "C" int EZQuestVrBindEngineContext( void );
+extern "C" int EZQuestVrSubmitEngineFrame( unsigned srcTex, int width, int height );
+#endif
+
 
 // NOTE: This has to be the last file included! (turned off below, since this is included like a header)
 #include "tier0/memdbgon.h"
@@ -849,11 +854,21 @@ bool CSDLMgr::CreateHiddenGameWindow( const char *pTitle, int width, int height 
 #endif
 
 #if defined( DX_TO_GL_ABSTRACTION )
+#if defined( ANDROID )
+	if ( EZQuestVrBindEngineContext() )
+	{
+		m_GLContext = (SDL_GLContext)0x1;
+		Msg( "EZQuest: engine GL context bound to XR share group\n" );
+	}
+	else
+#endif
+	{
 	m_GLContext = SDL_GL_CreateContext(m_Window);
 	if (m_GLContext == NULL)
 		Error( "Failed to create GL context: %s", SDL_GetError() );
 
 	SDL_GL_MakeCurrent(m_Window, m_GLContext);
+	}
 
 #if defined ANDROID && !defined TOGLES
 	if( l_gl4es )
@@ -1433,6 +1448,14 @@ void CSDLMgr::ShowPixels( CShowPixelsParams *params )
 	CFastTimer tm;
 	tm.Start();
 
+#if defined( ANDROID )
+	if ( EZQuestVrSubmitEngineFrame( params->m_srcTexName, params->m_width, params->m_height ) )
+	{
+		m_flPrevGLSwapWindowTime = 0.0;
+		CheckGLError( __LINE__ );
+		return;
+	}
+#endif
 	SDL_GL_SwapWindow( m_Window );
 
 	m_flPrevGLSwapWindowTime = tm.GetDurationInProgress().GetMillisecondsF();
