@@ -25,6 +25,7 @@
 #if defined( ANDROID )
 extern "C" int EZQuestVrBindEngineContext( void );
 extern "C" int EZQuestVrSubmitEngineFrame( unsigned srcTex, int width, int height );
+extern "C" int EZQuestVrStereoEyesReady( void );
 #endif
 
 
@@ -1449,6 +1450,12 @@ void CSDLMgr::ShowPixels( CShowPixelsParams *params )
 	tm.Start();
 
 #if defined( ANDROID )
+	if ( EZQuestVrStereoEyesReady() )
+	{
+		m_flPrevGLSwapWindowTime = 0.0;
+		CheckGLError( __LINE__ );
+		return;
+	}
 	if ( EZQuestVrSubmitEngineFrame( params->m_srcTexName, params->m_width, params->m_height ) )
 	{
 		m_flPrevGLSwapWindowTime = 0.0;

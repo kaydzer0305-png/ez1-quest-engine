@@ -1135,13 +1135,24 @@ void CEngineAPI::SetStartupInfo( StartupInfo_t &info )
 				g_pFileSystem->EnableWhitelistFileTracking( true, false, false );
 			}
 
+#if defined( ANDROID )
+			m_bSupportsVR = true;
+#else
 			m_bSupportsVR = modinfo->GetInt( "supportsvr" ) > 0 && CommandLine()->CheckParm( "-vr" );
+#endif
 			if ( m_bSupportsVR )
 			{
 				// This also has to happen before CreateGameWindow to know where to put
 				// the window and how big to make it
 				if ( InitVR() )
 				{
+#if defined( ANDROID )
+					if ( g_pSourceVR )
+					{
+						g_pSourceVR->SetShouldForceVRMode();
+						g_pSourceVR->Activate();
+					}
+#endif
 					if ( Steam3Client().SteamUtils() )
 					{
 						if ( Steam3Client().SteamUtils()->IsSteamRunningInVR() && g_pSourceVR->IsHmdConnected() )
