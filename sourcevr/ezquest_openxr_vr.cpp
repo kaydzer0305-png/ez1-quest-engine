@@ -1,6 +1,7 @@
 /*
 Copyright (C) 2026 kaydzer0305-png
-Android ISourceVirtualReality backend. Reads EZQuestVrCopyTracking().
+Android ISourceVirtualReality backend. Reads EZQuestVrCopyTracking()
+and allocates per-eye Source render targets for the client stereo loop.
 */
 
 #if defined( ANDROID ) || defined( __ANDROID__ )
@@ -9,6 +10,8 @@ Android ISourceVirtualReality backend. Reads EZQuestVrCopyTracking().
 #include "tier3/tier3.h"
 #include "tier1/interface.h"
 #include "mathlib/vmatrix.h"
+#include "materialsystem/imaterialsystem.h"
+#include "materialsystem/itexture.h"
 
 #include <dlfcn.h>
 #include <string.h>
@@ -17,6 +20,7 @@ Android ISourceVirtualReality backend. Reads EZQuestVrCopyTracking().
 
 #define EZTAG "EZQuest-SourceVR"
 #define EZLOG( ... ) __android_log_print( ANDROID_LOG_INFO, EZTAG, __VA_ARGS__ )
+#define EZERR( ... ) __android_log_print( ANDROID_LOG_ERROR, EZTAG, __VA_ARGS__ )
 
 struct XrQuaternionf { float x, y, z, w; };
 struct XrVector3f { float x, y, z; };
@@ -38,6 +42,7 @@ struct EzVrTrackingSnapshot {
 };
 
 typedef int (*CopyTrackingFn)( EzVrTrackingSnapshot *out );
+typedef int (*SubmitEyeFn)( int eye, int width, int height );
 static const float IN_PER_M = 39.3700787f;
 
 static void PoseToVMatrix( VMatrix &out, const float q[4], const float p[3] )
@@ -72,7 +77,14 @@ class CEzQuestSourceVR : public CTier3AppSystem< ISourceVirtualReality >
 {
         typedef CTier3AppSystem< ISourceVirtualReality > BaseClass;
 public:
-        CEzQuestSourceVR() : m_active(false), m_force(false), m_copy(NULL) { memset(&m_snap,0,sizeof m_snap); }
+        CEzQuestSourceVR()
+                : m_active(false), m_force(false), m_copy(NULL), m_submitEye(NULL)
+        {
+                memset(&m_snap,0,sizeof m_snap);
+                m_rtColor[0] = m_rtColor[1] = NULL;
+                m_rtDepth[0] = m_rtDepth[1] = NULL;
+                m_rtW = m_rtH = 0;
+        }
         virtual bool Connect( CreateInterfaceFn factory ) { BaseClass::Connect(factory); Resolve(); return true; }
         virtual void Disconnect() { BaseClass::Disconnect(); }
         virtual void *QueryInterface( const char *name )
@@ -80,18 +92,44 @@ public:
                 if ( name && !strcmp( name, SOURCE_VIRTUAL_REALITY_INTERFACE_VERSION ) ) return this;
                 return BaseClass::QueryInterface( name );
         }
-        virtual InitReturnVal_t Init() { Resolve(); EZLOG("init copy=%p", (void*)m_copy); return INIT_OK; }
-        virtual void Shutdown() {}
-        virtual bool ShouldRunInVR() { return m_active || Ok(); }
-        virtual bool IsHmdConnected() { return Ok() || m_force; }
-        virtual void GetViewportBounds( VREye, int *x, int *y, int *w, int *h )
+        virtual InitReturnVal_t Init()
+        {
+                Resolve();
+                m_active = m_force = true;
+                EZLOG("init copy=%p submit=%p (VR forced on)", (void*)m_copy, (void*)m_submitEye);
+                return INIT_OK;
+        }
+        virtual void Shutdown() { ShutdownRenderTargets(); }
+        virtual bool ShouldRunInVR() { return true; }
+        virtual bool IsHmdConnected() { return true; }
+        virtual void GetViewportBounds( VREye eye, int *x, int *y, int *w, int *h )
         {
                 Refresh();
-                if (x) *x=0; if (y) *y=0;
-                if (w) *w = m_snap.width ? (int)m_snap.width : 1440;
-                if (h) *h = m_snap.height ? (int)m_snap.height : 1440;
+                const int ew = EyeW();
+                const int eh = EyeH();
+                if ( m_rtColor[0] )
+                {
+                        if (x) *x=0; if (y) *y=0;
+                        if (w) *w=ew; if (h) *h=eh;
+                        return;
+                }
+                if (x) *x = (eye==VREye_Right) ? ew : 0;
+                if (y) *y = 0;
+                if (w) *w = ew;
+                if (h) *h = eh;
         }
-        virtual bool DoDistortionProcessing( VREye ) { return false; }
+        virtual bool DoDistortionProcessing( VREye eye )
+        {
+                Resolve();
+                Refresh();
+                const int i = eye==VREye_Right ? 1 : 0;
+                if ( m_submitEye )
+                {
+                        m_submitEye( i, EyeW(), EyeH() );
+                        return true;
+                }
+                return false;
+        }
         virtual bool CompositeHud( VREye, float[4], bool, bool, bool ) { return false; }
         virtual VMatrix GetMideyePose()
         {
@@ -113,8 +151,8 @@ public:
         {
                 if (!r) return false; Refresh();
                 r->nX=0; r->nY=0;
-                r->nWidth = m_snap.width ? (int)m_snap.width*2 : 2880;
-                r->nHeight = m_snap.height ? (int)m_snap.height : 1440;
+                r->nWidth = EyeW() * 2;
+                r->nHeight = EyeH();
                 return true;
         }
         virtual VMatrix GetMidEyeFromEye( VREye eye )
@@ -128,35 +166,101 @@ public:
                 return m;
         }
         virtual int GetVRModeAdapter() { return 0; }
-        virtual void CreateRenderTargets( IMaterialSystem * ) {}
-        virtual void ShutdownRenderTargets() {}
-        virtual ITexture *GetRenderTarget( VREye, EWhichRenderTarget ) { return NULL; }
+        virtual void CreateRenderTargets( IMaterialSystem *pMaterialSystem )
+        {
+                if ( !pMaterialSystem )
+                        return;
+                Refresh();
+                const int w = EyeW();
+                const int h = EyeH();
+                if ( m_rtColor[0] && m_rtW == w && m_rtH == h )
+                        return;
+                ShutdownRenderTargets();
+                static const char *kColor[2] = { "_rt_ezquest_eye_left", "_rt_ezquest_eye_right" };
+                static const char *kDepth[2] = { "_rt_ezquest_eye_left_z", "_rt_ezquest_eye_right_z" };
+                for ( int i = 0; i < 2; i++ )
+                {
+                        ITexture *color = pMaterialSystem->CreateNamedRenderTargetTextureEx2(
+                                kColor[i], w, h, RT_SIZE_LITERAL,
+                                pMaterialSystem->GetBackBufferFormat(),
+                                MATERIAL_RT_DEPTH_SEPARATE,
+                                TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT | TEXTUREFLAGS_NOMIP,
+                                0 );
+                        ITexture *depth = pMaterialSystem->CreateNamedRenderTargetTextureEx2(
+                                kDepth[i], w, h, RT_SIZE_LITERAL,
+                                IMAGE_FORMAT_NV_DST24,
+                                MATERIAL_RT_DEPTH_NONE,
+                                TEXTUREFLAGS_CLAMPS | TEXTUREFLAGS_CLAMPT | TEXTUREFLAGS_NOMIP,
+                                0 );
+                        m_rtColor[i] = color;
+                        m_rtDepth[i] = depth;
+                        if ( color )
+                                color->IncrementReferenceCount();
+                        if ( depth )
+                                depth->IncrementReferenceCount();
+                        EZLOG( "RT %s color=%p depth=%p %dx%d", kColor[i], (void*)color, (void*)depth, w, h );
+                }
+                m_rtW = w;
+                m_rtH = h;
+        }
+        virtual void ShutdownRenderTargets()
+        {
+                for ( int i = 0; i < 2; i++ )
+                {
+                        if ( m_rtColor[i] ) { m_rtColor[i]->DecrementReferenceCount(); m_rtColor[i] = NULL; }
+                        if ( m_rtDepth[i] ) { m_rtDepth[i]->DecrementReferenceCount(); m_rtDepth[i] = NULL; }
+                }
+                m_rtW = m_rtH = 0;
+        }
+        virtual ITexture *GetRenderTarget( VREye eye, EWhichRenderTarget which )
+        {
+                const int i = eye==VREye_Right ? 1 : 0;
+                if ( which == RT_Depth )
+                        return m_rtDepth[i];
+                return m_rtColor[i];
+        }
         virtual void GetRenderTargetFrameBufferDimensions( int &w, int &h )
         {
                 Refresh();
-                w = m_snap.width ? (int)m_snap.width : 1440;
-                h = m_snap.height ? (int)m_snap.height : 1440;
+                w = EyeW();
+                h = EyeH();
         }
         virtual bool Activate() { m_active = m_force = true; EZLOG("Activate"); return true; }
         virtual void Deactivate() { m_active = false; }
-        virtual bool ShouldForceVRMode() { return m_force || Ok(); }
+        virtual bool ShouldForceVRMode() { return true; }
         virtual void SetShouldForceVRMode() { m_force = true; }
 private:
+        int EyeW() const { return m_snap.width ? (int)m_snap.width : 1440; }
+        int EyeH() const { return m_snap.height ? (int)m_snap.height : 1440; }
         void Resolve()
         {
-                if (m_copy) return;
-                m_copy = (CopyTrackingFn)dlsym( RTLD_DEFAULT, "EZQuestVrCopyTracking" );
-                if (!m_copy) {
-                        void *h = dlopen( "liblauncher.so", RTLD_NOW|RTLD_NOLOAD );
-                        if (!h) h = dlopen( "liblauncher.so", RTLD_NOW );
-                        if (h) m_copy = (CopyTrackingFn)dlsym( h, "EZQuestVrCopyTracking" );
+                if (!m_copy)
+                {
+                        m_copy = (CopyTrackingFn)dlsym( RTLD_DEFAULT, "EZQuestVrCopyTracking" );
+                        if (!m_copy) {
+                                void *h = dlopen( "liblauncher.so", RTLD_NOW|RTLD_NOLOAD );
+                                if (!h) h = dlopen( "liblauncher.so", RTLD_NOW );
+                                if (h) m_copy = (CopyTrackingFn)dlsym( h, "EZQuestVrCopyTracking" );
+                        }
+                }
+                if (!m_submitEye)
+                {
+                        m_submitEye = (SubmitEyeFn)dlsym( RTLD_DEFAULT, "EZQuestVrSubmitEngineEyeFromCurrentFbo" );
+                        if (!m_submitEye) {
+                                void *h = dlopen( "liblauncher.so", RTLD_NOW|RTLD_NOLOAD );
+                                if (!h) h = dlopen( "liblauncher.so", RTLD_NOW );
+                                if (h) m_submitEye = (SubmitEyeFn)dlsym( h, "EZQuestVrSubmitEngineEyeFromCurrentFbo" );
+                        }
                 }
         }
         bool Refresh() { Resolve(); return m_copy ? m_copy(&m_snap)!=0 : false; }
-        bool Ok() { Refresh(); return m_snap.valid!=0; }
         bool m_active, m_force;
         CopyTrackingFn m_copy;
+        SubmitEyeFn m_submitEye;
         EzVrTrackingSnapshot m_snap;
+        ITexture *m_rtColor[2];
+        ITexture *m_rtDepth[2];
+        int m_rtW, m_rtH;
 };
 
 static CEzQuestSourceVR g_SourceVR;
