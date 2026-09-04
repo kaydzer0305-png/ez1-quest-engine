@@ -74,6 +74,7 @@ void SetLauncherArgs()
 	D("-fullscreen");
 	D("-nosteam");
 	D("-insecure");
+	D("-vr");
 
 #undef A
 #undef D
@@ -119,22 +120,6 @@ void android_property_print(const char *name)
 
 	Msg("prop %s=%s", name, strValue);
 }
-
-// ---------------------------------------------------------------------------
-// EZQuest Java bridge (slice D, part 1).
-//
-// Device state pushed from com.ezquest.engine.DeviceBridge, plus the
-// frame-loop heartbeat watched by the Java AnrWatchdog. Naming follows the
-// existing Java_com_valvesoftware_ValveActivity2_* functions above.
-//
-// Integration for the engine / OpenXR tree:
-//  * Call EZQuestSetEngineUp(1) once the frame loop is presenting; the Java
-//    bridge then reports "engine reachable" and push calls are accepted.
-//  * Call EZQuestWriteHeartbeat() once per presented frame; the Java
-//    AnrWatchdog reads $APP_DATA_PATH/diagnostics/heartbeat.bin.
-//  * Read g_ezBatteryPercent / g_ezBatteryCharging / g_ezThermalStatus
-//    (-1 = unknown) wherever the engine wants them (perf scaling, HUD).
-// ---------------------------------------------------------------------------
 
 static volatile int g_ezEngineUp = 0;
 static volatile int g_ezBatteryPercent = -1;
@@ -213,7 +198,6 @@ static void EZQuestLogEngineEnv()
 	EZQuestLogEnv( "LANG" );
 }
 
-
 DLL_EXPORT int LauncherMainAndroid( int argc, char **argv )
 {
 	InitCrashHandler();
@@ -231,7 +215,7 @@ DLL_EXPORT int LauncherMainAndroid( int argc, char **argv )
 	SetLauncherArgs();
 
 	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
-	DeclareCurrentThreadIsMainThread(); // Init thread propertly on Android
+	DeclareCurrentThreadIsMainThread();
 
 	return LauncherMain(iLastArgs, LauncherArgv);
 }
