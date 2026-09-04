@@ -17,7 +17,7 @@ def configure(conf):
         conf.define('LDFLAGS', conf.env.LINKFLAGS)
 
         if conf.env.DEST_OS == 'android':
-                # EZQuest slice D: native OpenXR bootstrap compiled into
+                # EZQuest slice D/E: native OpenXR bootstrap compiled into
                 # liblauncher.so. The loader (libopenxr_loader.so) + headers
                 # come from the Khronos openxr_loader_for_android AAR, which
                 # CI extracts into external/openxr/ (see build-android-arm64).
@@ -47,6 +47,7 @@ def build(bld):
                         'android/crashhandler.cpp',
                         'android/vr_main.cpp',
                         'android/vr_scene.cpp',
+                        'android/vr_input.cpp',
                         'android/ezquest_vr_engine.cpp'
                 ]
 
