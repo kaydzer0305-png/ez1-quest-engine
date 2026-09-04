@@ -21,11 +21,17 @@ import com.valvesoftware.ValveActivity2;
  * interstitial and taking focus), so by the time the engine activity
  * starts, focus flows normally and SDL's state machine proceeds.
  *
- * Flat baseline: routes to ValveActivity2 (SDL). Once the OpenXR native
- * bootstrap lands, route to EngineActivity instead.
+ * Flat baseline: routes to ValveActivity2 (SDL). The boot target is chosen
+ * by the {@link #META_BOOT_MODE} application meta-data (vr|flat, default
+ * flat): vr routes to EngineActivity, whose native side boots the OpenXR
+ * loop and falls back to the flat engine on its own if that fails, so this
+ * class never has to second-guess the native bootstrap.
  */
 public class LauncherActivity extends Activity {
     private static final String TAG = "EZQuest";
+
+    /** Application meta-data selecting the boot path: "vr" or "flat". */
+    public static final String META_BOOT_MODE = "com.ezquest.engine.BOOT_MODE";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,12 +51,36 @@ public class LauncherActivity extends Activity {
             return;
         }
 
-        Log.i(TAG, "launcher: content OK, starting flat engine");
+        String bootMode = bootMode();
+        Log.i(TAG, "launcher: content OK, boot mode " + bootMode);
         try {
-            startActivity(new Intent(this, ValveActivity2.class));
+            if ("vr".equals(bootMode)) {
+                startActivity(new Intent(this, EngineActivity.class));
+            } else {
+                startActivity(new Intent(this, ValveActivity2.class));
+            }
         } catch (Exception e) {
             Log.e(TAG, "launcher: could not start engine", e);
         }
         finish();
+    }
+
+    /** BOOT_MODE meta-data, defaulting to flat (the verified baseline). */
+    private String bootMode() {
+        try {
+            android.content.pm.PackageManager pm = getPackageManager();
+            android.content.pm.ApplicationInfo ai =
+                    pm.getApplicationInfo(getPackageName(),
+                            android.content.pm.PackageManager.GET_META_DATA);
+            if (ai.metaData != null) {
+                String mode = ai.metaData.getString(META_BOOT_MODE);
+                if (mode != null && !mode.isEmpty()) {
+                    return mode;
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "boot mode lookup failed; defaulting to flat", e);
+        }
+        return "flat";
     }
 }

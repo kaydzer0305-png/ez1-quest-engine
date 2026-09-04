@@ -50,6 +50,12 @@
         <meta-data
             android:name="com.ezquest.engine.GAME_PROFILE"
             android:value="hl2"/>
+        <!-- Boot path switch (safe flip): "vr" boots EngineActivity, whose
+             native OpenXR loop falls back to the flat SDL engine if the XR
+             bootstrap fails; "flat" boots ValveActivity2 directly. -->
+        <meta-data
+            android:name="com.ezquest.engine.BOOT_MODE"
+            android:value="vr"/>
         <!-- 2D bootstrap entry (mirrors SourceVR's LauncherActivity): draws
              immediately so the system interstitial clears and focus flows,
              then starts the engine explicitly. No VR categories, like the
@@ -76,8 +82,11 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density"
             android:exported="false">
         </activity>
-        <!-- VR engine path (not the boot entry yet: native ANativeActivity_onCreate
-             lands with slice D; no MAIN/LAUNCHER filter until then) -->
+        <!-- VR engine path: native ANativeActivity_onCreate + OpenXR
+             session/swapchain/compositor loop lives in liblauncher.so
+             (launcher/android/vr_main.cpp, slice D). Not the MAIN/LAUNCHER
+             entry: LauncherActivity routes here when BOOT_MODE=vr, and the
+             native side falls back to ValveActivity2 if XR init fails. -->
         <activity
             android:name="com.ezquest.engine.EngineActivity"
             android:label="Source Quest Engine"

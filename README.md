@@ -20,21 +20,32 @@ Current status:
   manual dispatch): waf-built `.so` files + prebuilt SDL2 + `libc++_shared.so`
   + SDL2 Java activity layer, zipaligned and apksigner-signed.
 - ✅ Flat (2D) HL2 boot baseline verified on-device.
-- 🔬 Immersive VR rendering (OpenXR session → swapchain → compositor) is being
-  finished in a separate private tree, not in this mirror yet.
+- ✅ **Immersive VR bootstrap (slice D) merged**: `EngineActivity` boots a
+  native OpenXR session → GLES swapchain → compositor frame loop in-headset
+  (head-tracked diagnostic scene) with automatic fallback to the flat
+  engine if XR init fails. `BOOT_MODE` meta-data switches vr/flat. The
+  engine render path plugs in via `EZQuestVrSetRenderHook()` — see
+  `docs/vr-integration.md`.
+- 🔬 Engine rendering into the XR frame loop (togles → swapchain FBOs) and
+  controller action spaces continue in the private tree, merging on the
+  seam documented in `docs/vr-integration.md`.
 
 ## Roadmap
 
-1. Base HL2 running **in-headset in VR** (OpenXR frame loop complete).
+1. Base HL2 running **in-headset in VR** — OpenXR frame loop done; engine
+   render path is the remaining piece.
 2. Merge **Entropy: Zero 1** game code (SDK-2013-based) into the engine build.
 3. Motion-controller input mapping, comfort options, performance pass
-   (fixed foveation, resolution scaling).
+   (fixed foveation, resolution scaling — `EZQUEST_XR_RES_SCALE` already
+   scales the XR swapchain).
 
 ## How we build
 
 - GitHub Actions (this repo, private): dispatch
   `build-android-arm64` → download the `SourceQuest-apk` artifact → sideload.
 - Engine: `./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns`
+- OpenXR loader: CI unpacks the Khronos `openxr_loader_for_android` AAR
+  (pinned 1.0.34) into `external/openxr/` before `waf configure`.
 - Device content (supplied by the user, not redistributed): pre-20th-anniversary
   Half-Life 2 files (Steam `steam_legacy` branch) in the classic
   `hl2/` + `platform/` layout on device storage.
