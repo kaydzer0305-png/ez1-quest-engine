@@ -469,6 +469,9 @@ def configure(conf):
 		projects['dedicated'] += ['utils/bzip2']
 	if conf.options.OPUS or conf.env.DEST_OS == 'android':
 		projects['game'] += ['engine/voice_codecs/opus']
+	# EZQuest: register sourcevr at configure so waf env cache exists for build()
+	if conf.env.DEST_OS == 'android':
+		projects['game'] += ['sourcevr']
 
 	if conf.options.DISABLE_WARNS:
 		compiler_optional_flags = ['-w']
