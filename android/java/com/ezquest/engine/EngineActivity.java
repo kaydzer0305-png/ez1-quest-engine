@@ -7,6 +7,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.valvesoftware.ValveActivity2;
+
 import com.ezquest.engine.diag.AnrWatchdog;
 import com.ezquest.engine.diag.CrashProbe;
 
