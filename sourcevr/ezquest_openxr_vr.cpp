@@ -132,7 +132,7 @@ public:
                 if ( color && materials )
                 {
                         CMatRenderContextPtr pRenderContext( materials );
-                        pRenderContext->PushRenderTargetAndViewport( color, m_rtDepth[i] );
+                        pRenderContext->PushRenderTargetAndViewport( color, m_rtDepth[i], 0, 0, EyeW(), EyeH() );
                         pRenderContext->Flush( false );
                         const int ok = m_submitEye( i, EyeW(), EyeH() );
                         pRenderContext->PopRenderTargetAndViewport();
