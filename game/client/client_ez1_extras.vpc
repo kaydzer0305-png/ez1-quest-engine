@@ -1,0 +1,17 @@
+//-----------------------------------------------------------------------------
+// Extra EZ1 units on top of client_hl2.vpc. Source: entropy-zero/source-sdk-2013 @ EZ1v4.0
+//-----------------------------------------------------------------------------
+$Macro SRCDIR		"..\.."
+
+$Project "Client (Entropy Zero extras)"
+{
+	$Folder	"Human_Error"
+	{
+		$File	"Human_Error\c_vehicle_drivable_apc.cpp"
+	}
+	$Folder	"EZ particles"
+	{
+		$File	"particles_ez.cpp"
+		$File	"particles_ez.h"
+	}
+}
