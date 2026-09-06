@@ -1,0 +1,32 @@
+name: apply-ffr
+on:
+  workflow_dispatch:
+  push:
+    branches: [ feat/ez1-phase1-sources-ffr ]
+    paths:
+      - 'scripts/apply-ffr.sh'
+      - 'launcher/android/ezquest_vr_ffr.cpp'
+      - 'launcher/android/ezquest_vr_ffr.h'
+      - '.github/workflows/apply-ffr.yml'
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ez1-phase1-sources-ffr
+      - name: Patch vr_main.cpp
+        run: bash scripts/apply-ffr.sh
+      - name: Commit if dirty
+        run: |
+          git config user.name kaydzer0305-png
+          git config user.email kaydzer0305@gmail.com
+          git add launcher/android/vr_main.cpp
+          if git diff --cached --quiet; then
+            echo no changes
+          else
+            git commit -m "Wire FFR/90Hz into vr_main (apply-ffr.sh)"
+            git push
+          fi
