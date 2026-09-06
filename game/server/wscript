@@ -10,9 +10,9 @@ PROJECT_NAME = 'server'
 
 games = {
 	'hl2': ['server_base.vpc', 'server_hl2.vpc'],
-	# EZ1 currently shares the HL2 VPC. Extra EZ1 units land in
-	# server_ez1.vpc once the SDK-2013 merge copies those files.
-	'ez1': ['server_base.vpc', 'server_hl2.vpc'],
+	# Extra EZ1 units (manhack toss, APC, EZ2 NPCs, custom weapons) sit in
+	# server_ez1_extras.vpc. Shared #ifdef EZ hunks are still a follow-up.
+	'ez1': ['server_base.vpc', 'server_hl2.vpc', 'server_ez1_extras.vpc'],
 	'episodic':['server_base.vpc', 'server_episodic.vpc'],
 	'hl2mp': ['server_base.vpc', 'server_hl2mp.vpc'],
 	'portal': ['server_base.vpc', 'server_portal.vpc'],
@@ -43,7 +43,6 @@ def configure(conf):
 
 	if game == 'ez1':
 		conf.env.append_unique('DEFINES', ['EZ=1', 'EZ1=1', 'HE_APC=1', 'GLOWS_ENABLE=1'])
-
 def build(bld):
 	game = vpc_parser.parse_vpcs( bld.env, games[bld.env.GAMES], '../..' )
 

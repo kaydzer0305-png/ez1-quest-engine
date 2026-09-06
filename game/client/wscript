@@ -13,9 +13,8 @@ def options(opt):
 
 games = {
 	'hl2': ['client_base.vpc', 'client_hl2.vpc'],
-	# EZ1 currently shares the HL2 VPC. Extra EZ1 units land in
-	# client_ez1.vpc once the SDK-2013 merge copies those files.
-	'ez1': ['client_base.vpc', 'client_hl2.vpc'],
+	# Extra EZ1 units (APC client, particles) sit in client_ez1_extras.vpc.
+	'ez1': ['client_base.vpc', 'client_hl2.vpc', 'client_ez1_extras.vpc'],
 	'hl2mp': ['client_base.vpc', 'client_hl2mp.vpc'],
 	'hl1': ['client_base.vpc', 'client_hl1.vpc'],
 	'episodic': ['client_base.vpc', 'client_episodic.vpc'],
@@ -36,7 +35,6 @@ def configure(conf):
 
 	if game == 'ez1':
 		conf.env.append_unique('DEFINES', ['EZ=1', 'EZ1=1', 'HE_APC=1', 'GLOWS_ENABLE=1'])
-
 def build(bld):
 	game = vpc_parser.parse_vpcs( bld.env, games[bld.env.GAMES], '../..' )
 

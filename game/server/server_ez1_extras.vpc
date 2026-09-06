@@ -1,0 +1,40 @@
+//-----------------------------------------------------------------------------
+// Extra EZ1 units on top of server_hl2.vpc. Source: entropy-zero/source-sdk-2013 @ EZ1v4.0
+//-----------------------------------------------------------------------------
+$Macro SRCDIR		"..\.."
+
+$Project "Server (Entropy Zero extras)"
+{
+	$Folder	"EZ1"
+	{
+		$File	"ez1\weapon_ManhackToss.cpp"
+		$File	"ez1\achievements_EZ.cpp"
+		$File	"ez1\EZ_Achievements_Reset.cpp"
+	}
+	$Folder	"EZ2 (EZ1 maps spawn these)"
+	{
+		$File	"ez2\npc_basepredator.cpp"
+		$File	"ez2\npc_basepredator.h"
+		$File	"ez2\npc_bullsquid.cpp"
+		$File	"ez2\npc_bullsquid.h"
+		$File	"ez2\npc_zombigaunt.cpp"
+		$File	"ez2\npc_zombigaunt.h"
+		$File	"ez2\prop_command_point.cpp"
+	}
+	$Folder	"mod"
+	{
+		$File	"mod\npc_base_custom.cpp"
+		$File	"mod\npc_base_custom.h"
+		$File	"mod\npc_lost_soul.cpp"
+		$File	"mod\npc_shadow_walker.cpp"
+		$File	"mod\npc_shadow_walker.h"
+		$File	"mod\weapon_custom_flaregun.cpp"
+		$File	"mod\weapon_custom_melee.h"
+		$File	"mod\weapon_smg2.cpp"
+	}
+	$Folder	"Human_Error"
+	{
+		$File	"Human_Error\vehicle_drivable_apc.cpp"
+		$File	"Human_Error\vehicle_drivable_apc.h"
+	}
+}

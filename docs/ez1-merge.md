@@ -1,30 +1,45 @@
 # Merging Entropy: Zero 1 game code
 
 This tree can already **configure and link** `--build-games=ez1`. That profile
-currently reuses the HL2 VPC lists and adds `EZ=1`, `EZ1=1`, `HE_APC=1`,
-`GLOWS_ENABLE=1` plus include paths for `ez1/`, `ez2/`, `mod/`, `Human_Error/`.
+uses the HL2 VPC lists, adds `EZ=1`, `EZ1=1`, `HE_APC=1`, `GLOWS_ENABLE=1`,
+and now also parses `client_ez1_extras.vpc` / `server_ez1_extras.vpc`.
 
 The official sources live in [`entropy-zero/source-sdk-2013`](https://github.com/entropy-zero/source-sdk-2013)
 (`sp/src/game/...`, tag `EZ1v4.0`). Copy **source only** — never commit VPKs,
 maps, or other Steam content.
 
-## What to copy (Phase 1)
+## Phase 1 — unique units (import script)
 
-From `sp/src/game/` into this repo's `game/`:
+```bash
+git clone --branch EZ1v4.0 --depth 1 https://github.com/entropy-zero/source-sdk-2013.git
+bash scripts/import-ez1-sources.sh /path/to/source-sdk-2013
+```
 
-- `server/ez1/` — `weapon_ManhackToss.cpp`, achievements
-- `server/Human_Error/` and `client/Human_Error/` — drivable APC
-- `server/ez2/` — bullsquid / zombigaunt / predator / command point (EZ1 maps spawn some of these)
-- `server/mod/` — custom NPCs and weapons referenced by EZ1 FGDs
-- Shared `#ifdef EZ` / `#ifdef EZ1` hunks in:
-  - `shared/hl2/hl2_gamerules.cpp` (Combine allegiance)
-  - `server/hl2/hl2_player.cpp` / `.h` (kick, nightvision)
-  - `shared/hl2mp/weapon_stunstick.cpp`
-  - `server/ai_basenpc.cpp`
-  - `server/hl2/npc_metropolice.cpp`, `npc_combine.cpp`
+That copies:
 
-Then switch the wscript maps from `client_hl2.vpc` / `server_hl2.vpc` to
-`client_ez1.vpc` / `server_ez1.vpc` once those VPC files list the new units.
+- `game/server/ez1/` — `weapon_ManhackToss.cpp`, achievements
+- `game/server/Human_Error/` and `game/client/Human_Error/` — drivable APC
+- `game/server/ez2/` — bullsquid / zombigaunt / predator / command point
+- `game/server/mod/` — custom NPCs and weapons referenced by EZ1 FGDs
+- `game/client/particles_ez.{cpp,h}`
+
+CI stays on `--build-games=hl2` until those files exist **and** the `#ifdef EZ`
+hunks below compile on this nillerusr tree. Do not flip the workflow default
+early: EZ1 units will not link without the hunks.
+
+## Phase 1b — `#ifdef EZ` / `#ifdef EZ1` hunks
+
+Do **not** replace whole files from SDK 2013 onto this Android 2017/18 tree.
+Port only the EZ conditional blocks into:
+
+- `shared/hl2/hl2_gamerules.cpp` (Combine allegiance)
+- `server/hl2/hl2_player.cpp` / `.h` (kick, nightvision / flashlight-as-NV)
+- `shared/hl2mp/weapon_stunstick.cpp`
+- `server/ai_basenpc.cpp`
+- `server/hl2/npc_metropolice.cpp`, `npc_combine.cpp`
+
+Then keep `GAME_PROFILE` as `hl2` in the manifest until `/sdcard/srceng/ez1`
+exists on the headset.
 
 ## Device content (not in git)
 
