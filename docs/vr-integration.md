@@ -24,6 +24,9 @@ native half of the `EngineActivity` boot path:
    `EZQuestVrSubmitEngineEyeFromCurrentFbo` so PostProcess does not blit
    a popped/mono backbuffer.
 10. Slice H3: comfort snap-turn + weapon cycle on Touch (see knobs).
+11. FFR + 90 Hz: `ezquest_vr_ffr.cpp` enables `XR_FB_foveation*` and
+    `XR_FB_display_refresh_rate` when the runtime lists them. Run
+    `bash scripts/apply-ffr.sh` so `vr_main.cpp` calls those hooks.
 
 ## Boot flow (BOOT_MODE safe flip)
 
@@ -44,6 +47,9 @@ LauncherActivity
 - `EZQUEST_VR_SNAP_TURN` defaults **on**. Right-stick flick snaps yaw
   (`EZQUEST_VR_SNAP_DEGREES`, default 30). Set `=0` for smooth stick look.
 - `EZQUEST_VR_SNAP_DEGREES` (15-90, default 30)
+- `EZQUEST_VR_FFR` defaults **on**. Set `=0` to skip fixed foveation.
+- `EZQUEST_VR_FFR_LEVEL` (0-4, default 2 / medium)
+- `EZQUEST_VR_REFRESH` (default 90)
 
 ## Touch → Source map
 
@@ -79,16 +85,16 @@ Remaining work:
    `EZQuest-SourceVR: RT _rt_ezquest_eye_left` (H1) and
    `submit eye=0/1 via bound RT … (slice H2)`. Expect true IPD stereo
    once the HL2 client VR view loop is running (`UseVR()` + `PostProcessFrame`).
-2. Merge Entropy: Zero 1 game code once HL2 presents in-headset.
-3. Performance: fixed foveation / further `EZQUEST_XR_RES_SCALE` tuning.
+2. Confirm `EZQuest-VR-FFR: FFR level=2 applied to 2/2 eyes` and 90 Hz.
+3. Merge Entropy: Zero 1 `#ifdef EZ` hunks once HL2 presents in-headset.
 
 ## Build
 
 CI unpacks Khronos `openxr_loader_for_android` 1.0.34 into `external/openxr/`.
 `launcher/wscript` compiles the XR compositor, present hook, tracking snapshot,
-and Source input adapter on Android. `sourcevr/` builds an OpenXR-backed
+Source input adapter, and FFR helper on Android. `sourcevr/` builds an OpenXR-backed
 `ISourceVirtualReality` module that reads that snapshot and allocates per-eye RTs.
 
 ## Logcat tags
 
-`EZQuest-VR`, `EZQuest-VR-Input`, `EZQuest-VR-Engine`, `EZQuest-VR-Present`, `EZQuest-SourceVR`.
+`EZQuest-VR`, `EZQuest-VR-Input`, `EZQuest-VR-Engine`, `EZQuest-VR-Present`, `EZQuest-SourceVR`, `EZQuest-VR-FFR`.
