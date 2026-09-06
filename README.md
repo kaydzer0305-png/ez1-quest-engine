@@ -23,13 +23,17 @@ Current status:
 - ✅ Slice H1: allocate `_rt_ezquest_eye_*` on `Activate()` if the matsys window was missed.
 - ✅ Slice H2: re-bind the eye RT before XR submit so PostProcess cannot flatten stereo.
 - ✅ Slice H3: snap-turn + `invnext` on right stick click.
-- 🔬 Remaining: headset verify stereo/input, then EZ1 game-code merge.
+- ✅ EZ1 build profile (`--build-games=ez1`) + Bad Cop Touch extras (kick / NV / manhack).
+- ✅ EZ1 extra VPC lists + import script for EZ1v4.0 unique units.
+- ✅ Quest FFR + 90 Hz request (`EZQUEST_VR_FFR`, `EZQUEST_VR_REFRESH`).
+- 🔬 Remaining: headset-verify stereo/input/FFR, then `#ifdef EZ` hunks + `GAME_PROFILE=ez1`.
 
 ## Roadmap
 
 1. Headset-verify HL2 **in-headset stereo** (H1/H2 logcat + IPD check).
-2. Merge **Entropy: Zero 1** game code (SDK-2013-based) into the engine build.
-3. Performance pass (fixed foveation; `EZQUEST_XR_RES_SCALE` already exists).
+2. Copy EZ1v4.0 unique units (`bash scripts/import-ez1-sources.sh`) and merge `#ifdef EZ` hunks.
+3. Flip `com.ezquest.engine.GAME_PROFILE` to `ez1` once `/sdcard/srceng/ez1` exists.
+4. Tune FFR level / `EZQUEST_XR_RES_SCALE` on-device.
 
 ## How we build
 
@@ -39,6 +43,7 @@ Current status:
 - Device content (not redistributed): pre-20th-anniversary HL2 (`steam_legacy`) as `hl2/` + `platform/`.
 
 See `docs/vr-integration.md` for the Java/native contract and engine seam.
+See `docs/ez1-merge.md` for the Entropy: Zero 1 game-code merge.
 
 ## Legal notes
 
