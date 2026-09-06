@@ -3,6 +3,11 @@ Copyright (C) 2026 kaydzer0305-png
 
 Maps Quest Touch (EzVrInputState) onto Source movement/attack commands.
 Does not use HID/SDL joystick paths.
+
+EZ1 extras (plan Phase 3):
+  Left grip + right trigger  -> +alt1 (Bad Cop kick)
+  A/X held ~0.45s            -> impulse 100 (nightvision)
+  Left grip + right stick click -> slot5 (manhack toss weapon)
 */
 
 #if defined( ANDROID ) || defined( __ANDROID__ )
@@ -34,6 +39,10 @@ int g_logged = 0;
 int g_fwd = 0, g_back = 0, g_ml = 0, g_mr = 0, g_speed = 0;
 int g_atk = 0, g_atk2 = 0, g_jump = 0, g_reload = 0, g_use = 0, g_menu = 0;
 int g_weap = 0;
+int g_kick = 0;
+int g_manhack = 0;
+int g_nvLatched = 0;
+int g_nvFrames = 0;
 int g_snapLatched = 0;
 
 static int EnvTruthy( const char *name, int deflt )
@@ -170,7 +179,20 @@ void EZQuestVrSourceInputSync( void )
         Hold( &g_mr,   lx >  dead, "+moveright\n", "-moveright\n" );
         Hold( &g_speed, L.stickClick, "+speed\n", "-speed\n" );
 
-        if ( R.stickClick && !g_weap )
+        const int kick = ( L.gripClick || L.grip > 0.7f ) && ( R.triggerClick || R.trigger > 0.7f );
+        Hold( &g_kick, kick, "+alt1\n", "-alt1\n" );
+
+        if ( ( L.gripClick || L.grip > 0.7f ) && R.stickClick && !g_manhack )
+        {
+                SendCmd( "slot5\n" );
+                g_manhack = 1;
+        }
+        else if ( !R.stickClick )
+        {
+                g_manhack = 0;
+        }
+
+        if ( R.stickClick && !g_weap && !g_manhack )
         {
                 SendCmd( "invnext\n" );
                 g_weap = 1;
@@ -180,13 +202,30 @@ void EZQuestVrSourceInputSync( void )
                 g_weap = 0;
         }
 
-        const int fire = ( R.triggerClick || R.trigger > 0.7f || L.triggerClick );
+        const int fire = !kick && ( R.triggerClick || R.trigger > 0.7f || L.triggerClick );
         Hold( &g_atk, fire, "+attack\n", "-attack\n" );
-        Hold( &g_atk2, ( R.gripClick || L.gripClick || R.grip > 0.7f ), "+attack2\n", "-attack2\n" );
+        Hold( &g_atk2, !kick && ( R.gripClick || L.gripClick || R.grip > 0.7f ), "+attack2\n", "-attack2\n" );
 
-        const int jump = R.primaryButton || L.primaryButton;
+        const int jumpHeld = R.primaryButton || L.primaryButton;
+        if ( jumpHeld )
+        {
+                if ( g_nvFrames < 40 )
+                        g_nvFrames++;
+                if ( g_nvFrames == 32 && !g_nvLatched )
+                {
+                        SendCmd( "impulse 100\n" );
+                        g_nvLatched = 1;
+                        EZLOG( "nightvision impulse 100" );
+                }
+        }
+        else
+        {
+                g_nvFrames = 0;
+                g_nvLatched = 0;
+        }
+        Hold( &g_jump, jumpHeld && !g_nvLatched, "+jump\n", "-jump\n" );
+
         const int reload = R.secondaryButton || L.secondaryButton;
-        Hold( &g_jump, jump, "+jump\n", "-jump\n" );
         Hold( &g_reload, reload, "+reload\n", "-reload\n" );
         Hold( &g_use, L.gripClick && L.triggerClick, "+use\n", "-use\n" );
         Hold( &g_menu, R.menuButton || L.menuButton, "cancelselect\n", "" );
@@ -202,8 +241,6 @@ void EZQuestVrSourceInputSync( void )
                                 deg = (float)atof( ds );
                         if ( deg < 15.f ) deg = 15.f;
                         if ( deg > 90.f ) deg = 90.f;
-                        /* m_yaw default 0.022 → mouse ticks = deg / 0.022
-                           PostMouseYaw multiplies by 220, so yawDelta = ticks/220 */
                         const float ticks = deg / 0.022f;
                         PostMouseYaw( ( rx > 0.f ? ticks : -ticks ) / 220.f );
                         g_snapLatched = 1;
@@ -221,7 +258,7 @@ void EZQuestVrSourceInputSync( void )
         if ( !g_logged )
         {
                 g_logged = 1;
-                EZLOG( "source mapping live (cbuf=%d inputsys=%d)", g_cbuf ? 1 : 0, g_input ? 1 : 0 );
+                EZLOG( "source mapping live (cbuf=%d inputsys=%d ez1-kick/nv/manhack)", g_cbuf ? 1 : 0, g_input ? 1 : 0 );
         }
 }
 
