@@ -48,6 +48,7 @@ GNU General Public License for more details.
 #include "ezquest_vr_present.h"
 #include "ezquest_vr_tracking.h"
 #include "ezquest_vr_sourceinput.h"
+#include "ezquest_vr_ffr.h"
 
 // Engine bridge (launcher/android/main.cpp): heartbeat file + Java
 // DeviceBridge "engine up" state. Called once the compositor presents.
@@ -238,7 +239,7 @@ static bool EzCreateInstance( void )
         EZ_XR( xrEnumerateInstanceExtensionProperties( NULL, extCount, &extCount, props ),
                         "xrEnumerateInstanceExtensionProperties" );
 
-        const char *enabled[8];
+        const char *enabled[16];
         uint32_t enabledCount = 0;
         for ( uint32_t r = 0; r < sizeof( requiredExts ) / sizeof( requiredExts[0] ); r++ )
         {
@@ -248,7 +249,8 @@ static bool EzCreateInstance( void )
                 if ( !found )
                 {
                         EzSetFailedFmt( "required instance extension missing: %s", requiredExts[r] );
-                        free( props );
+                        EZQuestVrAppendOptionalFbExts( props, extCount, enabled, &enabledCount, 16 );
+        free( props );
                         return false;
                 }
                 enabled[enabledCount++] = requiredExts[r];
@@ -491,6 +493,8 @@ static bool EzCreateSwapchains( void )
                         return false;
                 }
         }
+        EZQuestVrApplyFfrAndRefresh( g_app.instance, g_app.session,
+                        g_app.colorSwapchain[0], g_app.colorSwapchain[1] );
         return true;
 }
 
