@@ -10,6 +10,9 @@ PROJECT_NAME = 'server'
 
 games = {
 	'hl2': ['server_base.vpc', 'server_hl2.vpc'],
+	# EZ1 currently shares the HL2 VPC. Extra EZ1 units land in
+	# server_ez1.vpc once the SDK-2013 merge copies those files.
+	'ez1': ['server_base.vpc', 'server_hl2.vpc'],
 	'episodic':['server_base.vpc', 'server_episodic.vpc'],
 	'hl2mp': ['server_base.vpc', 'server_hl2mp.vpc'],
 	'portal': ['server_base.vpc', 'server_portal.vpc'],
@@ -38,6 +41,9 @@ def configure(conf):
 	if game not in games.keys():
 		conf.fatal("Couldn't find game: ", game)
 
+	if game == 'ez1':
+		conf.env.append_unique('DEFINES', ['EZ=1', 'EZ1=1', 'HE_APC=1', 'GLOWS_ENABLE=1'])
+
 def build(bld):
 	game = vpc_parser.parse_vpcs( bld.env, games[bld.env.GAMES], '../..' )
 
@@ -52,6 +58,14 @@ def build(bld):
 		'../../public/tier1',
 		'../../public'
 	]
+
+	if bld.env.GAMES == 'ez1':
+		includes += [
+			'ez1',
+			'ez2',
+			'mod',
+			'Human_Error',
+		]
 
 	defines = []
 
@@ -81,4 +95,3 @@ def build(bld):
 		subsystem = bld.env.MSVC_SUBSYSTEM,
 		idx      = bld.get_taskgen_count()
 	)
-
