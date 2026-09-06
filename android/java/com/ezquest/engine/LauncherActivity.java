@@ -33,6 +33,8 @@ public class LauncherActivity extends Activity {
     /** Application meta-data selecting the boot path: "vr" or "flat". */
     public static final String META_BOOT_MODE = "com.ezquest.engine.BOOT_MODE";
 
+    private boolean mEngineStarted;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -42,7 +44,24 @@ public class LauncherActivity extends Activity {
         setContentView(status);
 
         Diagnostics.startSession(this, "launcher");
+    }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Defer the engine start until this activity is visible/resumed.
+        // Starting EngineActivity from onCreate races window attach and the
+        // system logs a BAL-hardening warning (caller has no visible window);
+        // a background-started activity may never gain VR focus, leaving the
+        // OpenXR session stuck at READY (0 -> 1 -> 2, never VISIBLE/FOCUSED)
+        // with 0 frames presented. Posting here guarantees a visible window.
+        if (!mEngineStarted) {
+            mEngineStarted = true;
+            getWindow().getDecorView().post(this::startEngineOnceContentOk);
+        }
+    }
+
+    private void startEngineOnceContentOk() {
         // Content gate: missing layout -> importer (which returns the user
         // here on relaunch); present -> engine.
         if (ContentRouter.routeIfNeeded(this)) {
@@ -54,11 +73,20 @@ public class LauncherActivity extends Activity {
         String bootMode = bootMode();
         Log.i(TAG, "launcher: content OK, boot mode " + bootMode);
         try {
+            Intent engine;
             if ("vr".equals(bootMode)) {
-                startActivity(new Intent(this, EngineActivity.class));
+                engine = new Intent(this, EngineActivity.class);
+                // Start as an immersive VR activity so the runtime grants the
+                // OpenXR session focus (VISIBLE/FOCUSED) instead of leaving
+                // it stuck at READY with 0 frames.
+                engine.addCategory("com.oculus.intent.category.VR");
+                engine.addCategory("org.khronos.openxr.intent.category.IMMERSIVE_HMD");
+                engine.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             } else {
-                startActivity(new Intent(this, ValveActivity2.class));
+                engine = new Intent(this, ValveActivity2.class);
             }
+            startActivity(engine);
         } catch (Exception e) {
             Log.e(TAG, "launcher: could not start engine", e);
         }

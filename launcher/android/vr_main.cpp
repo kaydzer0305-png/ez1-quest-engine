@@ -498,9 +498,27 @@ static bool EzCreateSwapchains( void )
 // Event pump
 // ---------------------------------------------------------------------------
 
+static const char *EzSessionStateName( XrSessionState s )
+{
+        switch ( s )
+        {
+        case XR_SESSION_STATE_UNKNOWN: return "UNKNOWN(0)";
+        case XR_SESSION_STATE_IDLE: return "IDLE(1)";
+        case XR_SESSION_STATE_READY: return "READY(2)";
+        case XR_SESSION_STATE_SYNCHRONIZED: return "SYNCHRONIZED(3)";
+        case XR_SESSION_STATE_VISIBLE: return "VISIBLE(4)";
+        case XR_SESSION_STATE_FOCUSED: return "FOCUSED(5)";
+        case XR_SESSION_STATE_STOPPING: return "STOPPING(6)";
+        case XR_SESSION_STATE_LOSS_PENDING: return "LOSS_PENDING(7)";
+        case XR_SESSION_STATE_EXITING: return "EXITING(8)";
+        default: return "?";
+        }
+}
+
 static void EzHandleSessionState( XrSessionState newState )
 {
-        EZLOG( "session state: %d -> %d", (int )g_app.sessionState, (int )newState );
+        EZLOG( "session state: %s -> %s", EzSessionStateName( g_app.sessionState ),
+                        EzSessionStateName( newState ) );
         g_app.sessionState = newState;
 
         switch ( newState )
@@ -819,6 +837,15 @@ static void EzVrRun( JNIEnv *env )
                 if ( !g_app.sessionBegun || !g_app.rendering )
                 {
                         // Idle until the runtime focuses us; keep the thread responsive.
+                        // Log periodically so a stuck session (READY forever, 0 frames)
+                        // is obvious in logcat instead of silent until the Java timeout.
+                        static uint64_t idleSpins = 0;
+                        if ( ++idleSpins % 1000 == 1 )
+                        {
+                                EZLOG( "waiting for session focus: begun=%d rendering=%d state=%s (need VISIBLE/FOCUSED to present)",
+                                                (int )g_app.sessionBegun, (int )g_app.rendering,
+                                                EzSessionStateName( g_app.sessionState ) );
+                        }
                         struct timespec ts = { 0, 5 * 1000 * 1000 };
                         nanosleep( &ts, NULL );
                         continue;

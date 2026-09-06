@@ -134,7 +134,9 @@ public class EngineActivity extends NativeActivity {
                 }
                 Log.e(TAG, "XR bootstrap failed (status=" + status + " polledMs="
                         + mXrPolledMs + " reason=" + reason + "); falling back to flat");
-                fallBackToFlat(status == EZ_XR_FAILED ? reason : "XR loop did not present in time");
+                fallBackToFlat(status == EZ_XR_FAILED ? reason
+                        : "XR loop did not present in time (session never reached VISIBLE/FOCUSED;"
+                        + " see EZQuest-VR 'waiting for session focus' lines for the stuck state)");
                 return;
             }
             mHandler.postDelayed(this, XR_POLL_MS);

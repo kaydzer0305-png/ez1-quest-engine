@@ -90,6 +90,9 @@
         <activity
             android:name="com.ezquest.engine.EngineActivity"
             android:label="Source Quest Engine"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="false"
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density"
