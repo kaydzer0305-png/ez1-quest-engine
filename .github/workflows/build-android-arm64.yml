@@ -2,6 +2,11 @@ name: build-android-arm64
 
 on:
   workflow_dispatch:
+    inputs:
+      build_games:
+        description: 'waf --build-games value (hl2 stays the CI-safe default; ez1 is wired but still uses HL2 VPCs until sources merge)'
+        required: false
+        default: 'hl2'
 
 jobs:
   android-arm64:
@@ -18,12 +23,6 @@ jobs:
           echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r20b" >> "$GITHUB_ENV"
 
       - name: Fetch OpenXR loader (Khronos AAR)
-        # EZQuest slice D: the VR bootstrap in launcher/android/vr_main.cpp
-        # links the Khronos OpenXR loader. The AAR ships the arm64
-        # libopenxr_loader.so plus the OpenXR headers; waf's launcher
-        # configure() picks both up from external/openxr/.
-        # IMPORTANT: do not use `find … | head -1` — that can pick x86_64 first
-        # and then ld.lld fails with "incompatible with aarch64linux".
         env:
           OPENXR_AAR_VERSION: "1.0.34"
         run: |
@@ -42,16 +41,16 @@ jobs:
           python3 -c 'import struct; d=open("external/openxr/lib/aarch64/libopenxr_loader.so","rb").read(64); assert d[:4]==b"\x7fELF"; m=struct.unpack_from("<H",d,18)[0]; print("ELF e_machine",m); assert m==183, m'
 
       - name: Configure
-        run: ./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns
+        run: |
+          GAMES="${{ github.event.inputs.build_games }}"
+          if [ -z "$GAMES" ]; then GAMES=hl2; fi
+          echo "Configuring --build-games=$GAMES"
+          ./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns --build-games="$GAMES"
 
       - name: Build
         run: ./waf build
 
       - name: Build hidapi stub
-        # SDL's HIDDeviceManager shows a blocking error dialog when
-        # libhidapi.so is absent; the real SDL hidapi backend is not built
-        # by waf, so compile the no-op stub (Quest controllers come via
-        # OpenXR, not HID). See android/native/hidapi_stub.c.
         run: |
           CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
           mkdir -p apk/lib/arm64-v8a
