@@ -1,0 +1,34 @@
+name: apply-ez-ifdef-phase1b
+on:
+  workflow_dispatch:
+  push:
+    branches: [ feat/ez-ifdef-phase1b ]
+    paths:
+      - 'scripts/apply-ez-ifdef-phase1b.sh'
+      - 'scripts/patches/ez-ifdef-phase1b.patch'
+      - '.github/workflows/apply-ez-ifdef-phase1b.yml'
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ez-ifdef-phase1b
+      - name: Apply #ifdef EZ hunks
+        run: bash scripts/apply-ez-ifdef-phase1b.sh
+      - name: Commit if dirty
+        run: |
+          git config user.name kaydzer0305-png
+          git config user.email kaydzer0305@gmail.com
+          git add game/shared/hl2/hl2_gamerules.h game/shared/hl2/hl2_gamerules.cpp \
+                  game/server/hl2/hl2_player.h game/server/hl2/hl2_player.cpp \
+                  game/server/ai_basenpc.h game/server/ai_basenpc.cpp \
+                  game/server/hl2/npc_metropolice.h game/server/hl2/npc_metropolice.cpp
+          if git diff --cached --quiet; then
+            echo no changes
+          else
+            git commit -m "Apply Phase 1b #ifdef EZ hunks (allegiance, NV, bleed, metro glow)"
+            git push
+          fi
