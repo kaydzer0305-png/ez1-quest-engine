@@ -26,7 +26,8 @@ Current status:
 - ✅ EZ1 build profile (`--build-games=ez1`) + Bad Cop Touch extras (kick / NV / manhack).
 - ✅ EZ1 extra VPC lists + import script for EZ1v4.0 unique units.
 - ✅ Quest FFR + 90 Hz request (`EZQUEST_VR_FFR`, `EZQUEST_VR_REFRESH`).
-- 🔬 Remaining: headset-verify stereo/input/FFR, then `#ifdef EZ` hunks + `GAME_PROFILE=ez1`.
+- ✅ Phase 1b `#ifdef EZ` allegiance / NV / bleed / metro glow hunks (CI still `hl2`).
+- 🔬 Remaining: headset-verify stereo/input/FFR, import EZ1 unique units, stunstick+combine leftover hunks, then `GAME_PROFILE=ez1`.
 
 ## Roadmap
 
