@@ -1,0 +1,12 @@
+--- a/game/shared/hl2/hl2_gamerules.h
++++ b/game/shared/hl2/hl2_gamerules.h
+@@ -95,6 +95,9 @@
+ 
+ 	void AdjustPlayerDamageTaken( CTakeDamageInfo *pInfo );
+ 	float AdjustPlayerDamageInflicted( float damage );
++#ifdef EZ
++	void OnSkillLevelChanged( int iNewLevel );
++#endif
+ 
+ 	int						DefaultFOV( void ) { return 75; }
+ #endif
