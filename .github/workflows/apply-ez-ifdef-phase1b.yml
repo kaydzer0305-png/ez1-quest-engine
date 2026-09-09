@@ -5,6 +5,7 @@ on:
     branches: [ feat/ez-ifdef-phase1b ]
     paths:
       - 'scripts/apply-ez-ifdef-phase1b.sh'
+      - 'scripts/patches/ez-ifdef-game_*.patch'
       - 'scripts/patches/ez-ifdef-phase1b.patch'
       - '.github/workflows/apply-ez-ifdef-phase1b.yml'
 jobs:

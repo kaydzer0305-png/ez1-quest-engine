@@ -85,5 +85,5 @@ Still manual / not in this pass:
 
 - `game/shared/hl2mp/weapon_stunstick.cpp` — EZ charge / `m_bInSwing` / projected-texture need the EZ1v4.0 stunstick header members. Pickup policy is already in `Weapon_CanUse`.
 - `game/server/hl2/npc_combine.cpp` — 40+ Mapbase/EZ ally-squad hunks depend on the EZ combine header surface (follow behavior, elite inputs, etc.). Gamerules allegiance is what stops Combine shooting Bad Cop for now.
-- Unique units still come from `scripts/import-ez1-sources.sh`.
+- Unique units from EZ1v4.0 are in-tree (`game/server/ez1`, `ez2`, `mod`, `Human_Error`, `game/client/Human_Error`). They are compiled only with `--build-games=ez1`.
 - Do not flip `GAME_PROFILE` or CI `--build-games` until those units exist and an `ez1` link is green.
