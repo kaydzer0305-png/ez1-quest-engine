@@ -1,0 +1,14 @@
+--- a/game/server/hl2/npc_metropolice.h
++++ b/game/server/hl2/npc_metropolice.h
+@@ -463,6 +463,11 @@
+ 
+ 	static float	gm_flTimeLastSpokePeek;
+ 
++#ifdef EZ
++	virtual CAI_BaseNPC::EyeGlow_t *GetEyeGlowData( int i );
++	virtual int			GetNumGlows();
++#endif
++
+ public:
+ 	DEFINE_CUSTOM_AI;
+ };

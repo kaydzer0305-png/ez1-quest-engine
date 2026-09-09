@@ -1,0 +1,20 @@
+--- a/game/server/hl2/hl2_player.h
++++ b/game/server/hl2/hl2_player.h
+@@ -294,10 +294,17 @@
+ 	virtual void		ItemPostFrame();
+ 	virtual void		PlayUseDenySound();
+ 
++#ifndef EZ
+ private:
+ 	bool				CommanderExecuteOne( CAI_BaseNPC *pNpc, const commandgoal_t &goal, CAI_BaseNPC **Allies, int numAllies );
+ 
+ 	void				OnSquadMemberKilled( inputdata_t &data );
++#else
++protected:
++	virtual bool		CommanderExecuteOne( CAI_BaseNPC *pNpc, const commandgoal_t &goal, CAI_BaseNPC **Allies, int numAllies );
++	virtual void		OnSquadMemberKilled( inputdata_t &data );
++	virtual void		CleanUpSquadMarker( void );
++#endif
+ 
+ 	Class_T				m_nControlClass;			// Class when player is controlling another entity
+ 	// This player's HL2 specific data that should only be replicated to 
