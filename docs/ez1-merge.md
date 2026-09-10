@@ -8,6 +8,9 @@ The official sources live in [`entropy-zero/source-sdk-2013`](https://github.com
 (`sp/src/game/...`, tag `EZ1v4.0`). Copy **source only** — never commit VPKs,
 maps, or other Steam content.
 
+See `docs/ez1-ifdef-inventory.md` for the 89-file `#ifdef EZ` surface.
+See `docs/headset-verify.md` before flipping `GAME_PROFILE`.
+
 ## Phase 1 — unique units (import script)
 
 ```bash
