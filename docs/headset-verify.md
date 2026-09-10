@@ -2,6 +2,7 @@
 
 This is the gate before flipping `GAME_PROFILE` to `ez1` or merging
 the full `#ifdef EZ` set. Run after sideloading the CI `SourceQuest.apk`.
+Tracked as issue #22.
 
 ## Content layout
 
@@ -23,14 +24,17 @@ EZ1 content (do **not** flip the profile until stereo is confirmed on HL2):
 Use pre-20th-anniversary HL2 (`steam_legacy`). Own the games; nothing
 from Steam is committed here.
 
-## Logcat
+## How to run
+
+1. Dispatch `build-android-arm64` with `build_games=hl2` (default).
+2. Sideload `SourceQuest.apk`. Set `BOOT_MODE=vr`.
+3. On a machine with `adb` talking to the Quest 3S:
 
 ```bash
-adb logcat -s EZQuest-VR:I EZQuest-VR-Input:I EZQuest-VR-Engine:I \
-  EZQuest-VR-Present:I EZQuest-SourceVR:I EZQuest-VR-FFR:I EZQuest:I
+bash scripts/headset-verify.sh --check     # content layout only
+bash scripts/headset-verify.sh --once 25   # 25s capture + needle score
+bash scripts/headset-verify.sh             # live logcat
 ```
-
-Or: `bash scripts/headset-verify.sh`
 
 ## Pass criteria
 
@@ -51,10 +55,13 @@ Or: `bash scripts/headset-verify.sh`
    - If motion-sick, drop `EZQUEST_XR_RES_SCALE` to `0.75` before
      touching FFR level.
 
+Paste the `--once` needle score on issue #22 when you have a result.
+Do **not** set `GAME_PROFILE=ez1` until this passes on HL2 content.
+
 ## After HL2 stereo passes
 
-1. Port Priority 1 hunks in `docs/ez1-ifdef-inventory.md`.
-2. Dispatch CI with `build_games=ez1` on a branch that already has
-   unique units **and** those hunks.
+1. Port remaining Priority 1 hunks in `docs/ez1-ifdef-inventory.md` (PR #21).
+2. Unique units are already imported on `feat/ez1-unique-units` — dispatch CI
+   with `build_games=ez1` only after those hunks compile.
 3. Stage `/sdcard/srceng/ez1`, then set
    `com.ezquest.engine.GAME_PROFILE` to `ez1` in `AndroidManifest.xml`.
