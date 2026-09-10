@@ -26,24 +26,27 @@ Current status:
 - ✅ EZ1 build profile (`--build-games=ez1`) + Bad Cop Touch extras (kick / NV / manhack).
 - ✅ EZ1 extra VPC lists + import script for EZ1v4.0 unique units.
 - ✅ Quest FFR + 90 Hz request (`EZQUEST_VR_FFR`, `EZQUEST_VR_REFRESH`).
-- 🔬 Remaining: headset-verify stereo/input/FFR, then `#ifdef EZ` hunks + `GAME_PROFILE=ez1`.
+- ✅ Headset-verify kit: `docs/headset-verify.md` + `scripts/headset-verify.sh --check|--once`.
+- 🔬 Remaining on-device: confirm stereo / input / FFR on Quest 3S (issue #22), then finish `#ifdef EZ` hunks (issue #23) and flip `GAME_PROFILE=ez1`.
 
 ## Roadmap
 
-1. Headset-verify HL2 **in-headset stereo** (H1/H2 logcat + IPD check).
-2. Copy EZ1v4.0 unique units (`bash scripts/import-ez1-sources.sh`) and merge `#ifdef EZ` hunks.
-3. Flip `com.ezquest.engine.GAME_PROFILE` to `ez1` once `/sdcard/srceng/ez1` exists.
+1. Headset-verify HL2 **in-headset stereo** (H1/H2 logcat + IPD check) — run `bash scripts/headset-verify.sh --once 25` on the Quest 3S. Issue #22.
+2. Unique EZ1v4.0 units via `bash scripts/import-ez1-sources.sh` / workflow `import-ez1-units` (this branch). `#ifdef EZ` hunks stay on `feat/ez-ifdef-phase1b` (PR #21).
+3. Flip `com.ezquest.engine.GAME_PROFILE` to `ez1` once `/sdcard/srceng/ez1` exists **and** #22 passes.
 4. Tune FFR level / `EZQUEST_XR_RES_SCALE` on-device.
 
 ## How we build
 
 - GitHub Actions: dispatch `build-android-arm64` → download `SourceQuest-apk` → sideload.
+- Keep `build_games=hl2` until #22 passes. `ez1` is wired but must not be the CI default yet.
 - Engine: `./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns`
 - OpenXR loader: CI unpacks Khronos `openxr_loader_for_android` 1.0.34 into `external/openxr/`.
 - Device content (not redistributed): pre-20th-anniversary HL2 (`steam_legacy`) as `hl2/` + `platform/`.
 
 See `docs/vr-integration.md` for the Java/native contract and engine seam.
 See `docs/ez1-merge.md` for the Entropy: Zero 1 game-code merge.
+See `docs/headset-verify.md` for the Quest 3S pass/fail gate.
 
 ## Legal notes
 
