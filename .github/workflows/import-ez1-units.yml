@@ -2,6 +2,11 @@ name: import-ez1-units
 
 on:
   workflow_dispatch:
+    inputs:
+      note:
+        description: 'optional note'
+        required: false
+        default: 'import'
 
 jobs:
   import:
@@ -18,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone --branch EZ1v4.0 --depth 1 https://github.com/entropy-zero/source-sdk-2013.git /tmp/source-sdk-2013
-          echo "SDK HEAD=$(git -C /tmp/source-sdk-2013 rev-parse HEAD)"
+          echo SDK_HEAD=$(git -C /tmp/source-sdk-2013 rev-parse HEAD)
           test -d /tmp/source-sdk-2013/sp/src/game/server/ez1
 
       - name: Copy unique units (no shared HL2 rewrites)
@@ -32,40 +37,19 @@ jobs:
           set -euo pipefail
           SHA=$(git -C /tmp/source-sdk-2013 rev-parse HEAD)
           mkdir -p docs
-          printf '%s
-' \
-            '# EZ1v4.0 unique units' \
-            '' \
-            "Imported by scripts/import-ez1-sources.sh from entropy-zero/source-sdk-2013 tag EZ1v4.0 (${SHA})." \
-            '' \
-            'Source only - no VPKs, maps, or Steam content.' \
-            'Compiled only when --build-games=ez1 (CI default stays hl2).' \
-            '' \
-            '## Tree' \
-            '' \
-            '- game/server/ez1/ - Manhack toss + EZ achievements' \
-            '- game/server/ez2/ - bullsquid / zombigaunt / predator / command point' \
-            '- game/server/mod/ - custom NPCs and weapons referenced by EZ1 FGDs' \
-            '- game/server/Human_Error/ + game/client/Human_Error/ - drivable APC' \
-            '- game/client/particles_ez.{cpp,h}' \
-            '' \
-            'See game/server/server_ez1_extras.vpc and game/client/client_ez1_extras.vpc.' \
-            > docs/ez1-unique-units.md
+          echo "# EZ1v4.0 unique units" > docs/ez1-unique-units.md
+          echo "" >> docs/ez1-unique-units.md
+          echo "Imported by scripts/import-ez1-sources.sh from entropy-zero/source-sdk-2013 tag EZ1v4.0 (${SHA})." >> docs/ez1-unique-units.md
+          echo "" >> docs/ez1-unique-units.md
+          echo "Source only - no VPKs, maps, or Steam content." >> docs/ez1-unique-units.md
+          echo "Compiled only when --build-games=ez1 (CI default stays hl2)." >> docs/ez1-unique-units.md
 
       - name: Commit and push
         run: |
           set -euo pipefail
           git config user.name kaydzer0305-png
           git config user.email kaydzer0305@gmail.com
-          git add \
-            game/server/ez1 \
-            game/server/ez2 \
-            game/server/mod \
-            game/server/Human_Error \
-            game/client/Human_Error \
-            game/client/particles_ez.cpp \
-            game/client/particles_ez.h \
-            docs/ez1-unique-units.md
+          git add game/server/ez1 game/server/ez2 game/server/mod game/server/Human_Error game/client/Human_Error game/client/particles_ez.cpp game/client/particles_ez.h docs/ez1-unique-units.md
           if git diff --cached --quiet; then
             echo no unique-unit changes
             exit 0
