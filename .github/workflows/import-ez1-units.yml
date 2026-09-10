@@ -22,7 +22,10 @@ jobs:
           test -d /tmp/source-sdk-2013/sp/src/game/server/ez1
 
       - name: Copy unique units (no shared HL2 rewrites)
-        run: bash scripts/import-ez1-sources.sh /tmp/source-sdk-2013
+        run: |
+          set -euo pipefail
+          chmod +x scripts/import-ez1-sources.sh
+          bash scripts/import-ez1-sources.sh /tmp/source-sdk-2013
 
       - name: Record import provenance
         run: |
@@ -32,25 +35,27 @@ jobs:
           cat > docs/ez1-unique-units.md <<EOF
           # EZ1v4.0 unique units
 
-          Imported by `scripts/import-ez1-sources.sh` from
-          [entropy-zero/source-sdk-2013](https://github.com/entropy-zero/source-sdk-2013)
-          tag `EZ1v4.0` (`$SHA`).
+          Imported by scripts/import-ez1-sources.sh from
+          https://github.com/entropy-zero/source-sdk-2013
+          tag EZ1v4.0 (${SHA}).
 
-          Source only — no VPKs, maps, or Steam content.
-          Compiled only when `--build-games=ez1` (CI default stays `hl2`).
+          Source only - no VPKs, maps, or Steam content.
+          Compiled only when --build-games=ez1 (CI default stays hl2).
 
           ## Tree
 
-          - `game/server/ez1/` — Manhack toss + EZ achievements
-          - `game/server/ez2/` — bullsquid / zombigaunt / predator / command point
-          - `game/server/mod/` — custom NPCs and weapons referenced by EZ1 FGDs
-          - `game/server/Human_Error/` + `game/client/Human_Error/` — drivable APC
-          - `game/client/particles_ez.{cpp,h}`
+          - game/server/ez1/ - Manhack toss + EZ achievements
+          - game/server/ez2/ - bullsquid / zombigaunt / predator / command point
+          - game/server/mod/ - custom NPCs and weapons referenced by EZ1 FGDs
+          - game/server/Human_Error/ + game/client/Human_Error/ - drivable APC
+          - game/client/particles_ez.{cpp,h}
 
-          See `game/server/server_ez1_extras.vpc` and `game/client/client_ez1_extras.vpc`.
+          See game/server/server_ez1_extras.vpc and game/client/client_ez1_extras.vpc.
           EOF
+          # drop accidental indent from the YAML block
+          sed -i 's/^          //' docs/ez1-unique-units.md
 
-      - name: Commit if dirty
+      - name: Commit and push
         run: |
           set -euo pipefail
           git config user.name kaydzer0305-png
@@ -64,9 +69,11 @@ jobs:
             game/client/particles_ez.cpp \
             game/client/particles_ez.h \
             docs/ez1-unique-units.md
+          git pull --rebase origin feat/ez1-unique-units
           if git diff --cached --quiet; then
             echo no unique-unit changes
           else
             git commit -m "Import EZ1v4.0 unique units (source only, extras.vpc list)"
+            git pull --rebase origin feat/ez1-unique-units
             git push origin feat/ez1-unique-units
           fi
