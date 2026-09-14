@@ -7,6 +7,17 @@
 
 #include "npc_vortigaunt_episodic.h"
 
+// Compatibility values normally supplied by the EZ2 AI base.
+#ifndef EZ_VARIANT_RAD
+#define EZ_VARIANT_RAD 2
+#endif
+#ifndef BLOOD_COLOR_BLUE
+#define BLOOD_COLOR_BLUE BLOOD_COLOR_GREEN
+#endif
+#ifndef BLOOD_COLOR_ZOMBIE
+#define BLOOD_COLOR_ZOMBIE BLOOD_COLOR_GREEN
+#endif
+
 //=========================================================
 //	>> CNPC_Zombigaunt
 //=========================================================
@@ -19,6 +30,23 @@ public:
 	virtual void	Precache( void );
 
 protected:
+	// EZ2 stores these in its Vortigaunt/AI base. Keep local compatibility
+	// state while retaining the supported Android engine implementation.
+	int					m_tEzVariant = 0;
+	float				m_fGlowAge = 0.0f;
+
+	void StartHandGlow( int beamType, int nHand ) {}
+	void EndHandGlow( int beamType = VORTIGAUNT_BEAM_ALL ) {}
+	void ClawAttack( float flDist, float flDamage, const QAngle &viewPunch, const Vector &velocityPunch, int bloodOrigin, int damageType )
+	{
+		CBaseEntity *pHurt = CheckTraceHullAttack( flDist, Vector( -16, -16, -16 ), Vector( 16, 16, 16 ), flDamage, damageType );
+		if ( pHurt )
+		{
+			pHurt->ViewPunch( viewPunch );
+			pHurt->ApplyAbsVelocityImpulse( velocityPunch );
+		}
+	}
+
 	// Glowing eyes
 	int					GetNumGlows() { return 0; } // No glows under headcrabs
 
