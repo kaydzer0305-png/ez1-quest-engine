@@ -35,29 +35,27 @@ jobs:
           declaration = 'int HLSS_SelectTargetType(CBaseEntity *pEntity);'
           helper = '''int HLSS_SelectTargetType(CBaseEntity *pEntity);
 
-static Disposition_t PlayerDispositionToClass( Class_T targetClass )
-{
-\tCBasePlayer *pPlayer = UTIL_GetLocalPlayer();
-\treturn pPlayer ? pPlayer->GetDefaultRelationshipDisposition( targetClass ) : D_NU;
-}'''
+          static Disposition_t PlayerDispositionToClass( Class_T targetClass )
+          {
+          \tCBasePlayer *pPlayer = UTIL_GetLocalPlayer();
+          \treturn pPlayer ? pPlayer->GetDefaultRelationshipDisposition( targetClass ) : D_NU;
+          }'''
+          helper = '\n'.join(line[10:] if line.startswith('          ') else line for line in helper.splitlines())
           if helper not in text:
               if declaration not in text:
                   raise SystemExit('APC helper insertion point was not found')
               text = text.replace(declaration, helper, 1)
 
           replacements = {
-              'CBaseCombatCharacter::GetDefaultRelationshipDispositionBetweenClasses( CLASS_PLAYER, info.GetAttacker()->Classify() )':
-                  'PlayerDispositionToClass( info.GetAttacker()->Classify() )',
-              'CBaseCombatCharacter::GetDefaultRelationshipDispositionBetweenClasses( CLASS_PLAYER, tr.m_pEnt->Classify() )':
-                  'PlayerDispositionToClass( tr.m_pEnt->Classify() )',
-              'if (!DoesLaserDotHaveTarget( m_hLaserDot ))':
-                  'if ( m_flLaserTargetTime < gpGlobals->curtime )',
+              'CBaseCombatCharacter::GetDefaultRelationshipDispositionBetweenClasses( CLASS_PLAYER, info.GetAttacker()->Classify() )': 'PlayerDispositionToClass( info.GetAttacker()->Classify() )',
+              'CBaseCombatCharacter::GetDefaultRelationshipDispositionBetweenClasses( CLASS_PLAYER, tr.m_pEnt->Classify() )': 'PlayerDispositionToClass( tr.m_pEnt->Classify() )',
+              'if (!DoesLaserDotHaveTarget( m_hLaserDot ))': 'if ( m_flLaserTargetTime < gpGlobals->curtime )',
           }
           for old, new in replacements.items():
               if old in text:
                   text = text.replace(old, new, 1)
               elif new not in text:
-                  raise SystemExit(f'Expected APC expression was not found: {old}')
+                  raise SystemExit('Expected APC expression was not found')
           apc.write_text(text)
           PY
 
