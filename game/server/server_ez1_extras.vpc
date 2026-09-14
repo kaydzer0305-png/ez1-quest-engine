@@ -13,7 +13,6 @@ $Project "Server (Entropy Zero extras)"
 	$Folder	"EZ1"
 	{
 		$File	"ez1\weapon_ManhackToss.cpp"
-		$File	"ez1\achievements_EZ.cpp"
 		$File	"ez1\EZ_Achievements_Reset.cpp"
 	}
 	$Folder	"EZ2 (EZ1 maps spawn these)"
