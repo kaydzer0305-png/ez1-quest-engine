@@ -265,7 +265,8 @@ void CWeaponManhackToss::PrimaryAttack(void)
 	PlayerManhacks->KeyValue("squadname", "controllable_manhack_squad");
 	DispatchSpawn( PlayerManhacks );
 	PlayerManhacks->Activate();
-	PlayerManhacks->ShouldFollowPlayer(true);
+	// This engine marks hacked manhacks as player allies through the interaction hook.
+	PlayerManhacks->NotifyInteraction(NULL);
 
 	// View punch stuff inherited from the Pistol
 	if (pOwner)
