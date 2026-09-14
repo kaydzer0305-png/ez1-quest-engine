@@ -1,0 +1,73 @@
+name: Apply Zombigaunt and achievement compatibility fixes
+
+on:
+  push:
+    branches:
+      - feat/ez1-unique-units-v2
+    paths:
+      - .github/workflows/apply-zombigaunt-compat.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ez1-unique-units-v2
+      - name: Apply compatibility patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          vpc = Path("game/server/server_ez1_extras.vpc")
+          text = vpc.read_text()
+          achievement = '\t\t$File\t"ez1\\\\achievements_EZ.cpp"\n'
+          if achievement not in text:
+              raise SystemExit("Achievement VPC target not found")
+          vpc.write_text(text.replace(achievement, '', 1))
+
+          source = Path("game/server/ez2/npc_zombigaunt.cpp")
+          text = source.read_text()
+          text, count = re.subn(
+              r'\n\tif \(m_tEzVariant == EZ_VARIANT_RAD\)\n\t\{.*?\n\t\}\n\n\tSetViewOffset',
+              '\n\t// This engine branch does not provide EZ2 NPC variants or their blood constants.\n\tSetBloodColor( BLOOD_COLOR_GREEN );\n\n\tSetViewOffset',
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("Zombigaunt variant block target not found")
+
+          start_marker = 'void CNPC_Zombigaunt::HandleAnimEvent( animevent_t *pEvent )\n{'
+          next_marker = '//-----------------------------------------------------------------------------\n// Purpose: Returns true if a reasonable jumping distance'
+          start = text.find(start_marker)
+          end = text.find(next_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit("Zombigaunt animation handler target not found")
+          replacement = '''void CNPC_Zombigaunt::HandleAnimEvent( animevent_t *pEvent )
+{
+\t// The base Vortigaunt owns its claw and glow helpers in this engine.
+\t// Delegating preserves the supported melee animation behavior.
+\tBaseClass::HandleAnimEvent( pEvent );
+}
+
+'''
+          source.write_text(text[:start] + replacement + text[end:])
+          PY
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add game/server/server_ez1_extras.vpc game/server/ez2/npc_zombigaunt.cpp
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Fix Zombigaunt and achievement build compatibility"
+          git push origin HEAD:feat/ez1-unique-units-v2
