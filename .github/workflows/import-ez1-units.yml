@@ -3,10 +3,10 @@ name: import-ez1-units
 on:
   workflow_dispatch:
     inputs:
-      note:
-        description: 'optional note'
-        required: false
-        default: 'import'
+      target_branch:
+        description: 'New branch to receive the imported EZ1 sources'
+        required: true
+        default: 'feat/ez1-unique-units-v2'
 
 jobs:
   import:
@@ -16,44 +16,92 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feat/ez1-unique-units
+          ref: master
           fetch-depth: 0
 
-      - name: Clone entropy-zero/source-sdk-2013 @ EZ1v4.0
+      - name: Create clean import branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+          git check-ref-format --branch "$TARGET_BRANCH"
+          if git ls-remote --exit-code --heads origin "$TARGET_BRANCH" >/dev/null 2>&1; then
+            echo "target branch already exists: $TARGET_BRANCH" >&2
+            exit 1
+          fi
+          git switch -c "$TARGET_BRANCH"
+
+      - name: Clone Entropy Zero SDK
         run: |
           set -euo pipefail
           git clone --branch EZ1v4.0 --depth 1 https://github.com/entropy-zero/source-sdk-2013.git /tmp/source-sdk-2013
-          echo SDK_HEAD=$(git -C /tmp/source-sdk-2013 rev-parse HEAD)
           test -d /tmp/source-sdk-2013/sp/src/game/server/ez1
 
-      - name: Copy unique units (no shared HL2 rewrites)
+      - name: Import unique units
+        run: bash scripts/import-ez1-sources.sh /tmp/source-sdk-2013
+
+      - name: Verify imported source surface
         run: |
           set -euo pipefail
-          chmod +x scripts/import-ez1-sources.sh
-          bash scripts/import-ez1-sources.sh /tmp/source-sdk-2013
+          required=(
+            game/server/ez1/weapon_ManhackToss.cpp
+            game/server/ez1/achievements_EZ.cpp
+            game/server/ez1/EZ_Achievements_Reset.cpp
+            game/server/ez2/npc_basepredator.cpp
+            game/server/ez2/npc_basepredator.h
+            game/server/ez2/npc_bullsquid.cpp
+            game/server/ez2/npc_bullsquid.h
+            game/server/ez2/npc_zombigaunt.cpp
+            game/server/ez2/npc_zombigaunt.h
+            game/server/ez2/prop_command_point.cpp
+            game/server/mod/npc_base_custom.cpp
+            game/server/mod/npc_base_custom.h
+            game/server/mod/npc_lost_soul.cpp
+            game/server/mod/npc_shadow_walker.cpp
+            game/server/mod/npc_shadow_walker.h
+            game/server/mod/weapon_custom_flaregun.cpp
+            game/server/mod/weapon_custom_melee.h
+            game/server/mod/weapon_smg2.cpp
+            game/server/Human_Error/vehicle_drivable_apc.cpp
+            game/server/Human_Error/vehicle_drivable_apc.h
+            game/client/Human_Error/c_vehicle_drivable_apc.cpp
+            game/client/particles_ez.cpp
+            game/client/particles_ez.h
+          )
+          missing=0
+          for path in "${required[@]}"; do
+            if [[ ! -f "$path" ]]; then
+              echo "missing imported file: $path" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
 
-      - name: Record import provenance
+      - name: Record provenance
         run: |
           set -euo pipefail
           SHA=$(git -C /tmp/source-sdk-2013 rev-parse HEAD)
-          mkdir -p docs
-          echo "# EZ1v4.0 unique units" > docs/ez1-unique-units.md
-          echo "" >> docs/ez1-unique-units.md
-          echo "Imported by scripts/import-ez1-sources.sh from entropy-zero/source-sdk-2013 tag EZ1v4.0 (${SHA})." >> docs/ez1-unique-units.md
-          echo "" >> docs/ez1-unique-units.md
-          echo "Source only - no VPKs, maps, or Steam content." >> docs/ez1-unique-units.md
-          echo "Compiled only when --build-games=ez1 (CI default stays hl2)." >> docs/ez1-unique-units.md
+          cat > docs/ez1-unique-units.md <<EOF
+          # EZ1v4.0 unique units
 
-      - name: Commit and push
+          Imported from entropy-zero/source-sdk-2013 tag \`EZ1v4.0\` at \`$SHA\`.
+
+          Source only — no VPKs, maps, or Steam content. Compiled only when
+          \`--build-games=ez1\`; the default remains \`hl2\` until headset verification passes.
+          EOF
+          sed -i 's/^          //' docs/ez1-unique-units.md
+
+      - name: Commit and push import branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
           set -euo pipefail
           git config user.name kaydzer0305-png
-          git config user.email kaydzer0305@gmail.com
-          git add game/server/ez1 game/server/ez2 game/server/mod game/server/Human_Error game/client/Human_Error game/client/particles_ez.cpp game/client/particles_ez.h docs/ez1-unique-units.md
-          if git diff --cached --quiet; then
-            echo no unique-unit changes
-            exit 0
-          fi
-          git commit -m "Import EZ1v4.0 unique units (source only, extras.vpc list)"
-          git pull --rebase origin feat/ez1-unique-units
-          git push origin feat/ez1-unique-units
+          git config user.email 283244158+kaydzer0305-png@users.noreply.github.com
+          git add -f game/server/ez1 game/server/ez2 game/server/mod \
+            game/server/Human_Error game/client/Human_Error \
+            game/client/particles_ez.cpp game/client/particles_ez.h \
+            docs/ez1-unique-units.md
+          git diff --cached --quiet && { echo 'import produced no changes' >&2; exit 1; }
+          git commit -m 'Import complete EZ1v4.0 unique source units'
+          git push origin "HEAD:$TARGET_BRANCH"
