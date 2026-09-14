@@ -1,10 +1,13 @@
 name: build-android-arm64
 
 on:
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       build_games:
-        description: 'waf --build-games value (hl2 stays the CI-safe default; ez1 is wired but still uses HL2 VPCs until sources merge)'
+        description: 'waf --build-games value (manual builds default to hl2; pull requests validate ez1)'
         required: false
         default: 'hl2'
 
@@ -42,8 +45,12 @@ jobs:
 
       - name: Configure
         run: |
-          GAMES="${{ github.event.inputs.build_games }}"
-          if [ -z "$GAMES" ]; then GAMES=hl2; fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            GAMES=ez1
+          else
+            GAMES="${{ github.event.inputs.build_games }}"
+            if [ -z "$GAMES" ]; then GAMES=hl2; fi
+          fi
           echo "Configuring --build-games=$GAMES"
           ./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns --build-games="$GAMES"
 
