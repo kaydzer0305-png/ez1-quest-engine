@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - feat/ez1-unique-units-v2
-    paths:
-      - .github/workflows/apply-zombigaunt-compat.yml
 
 permissions:
   contents: write
@@ -26,7 +24,7 @@ jobs:
 
           vpc = Path("game/server/server_ez1_extras.vpc")
           text = vpc.read_text()
-          achievement = '\t\t$File\t"ez1\\\\achievements_EZ.cpp"\n'
+          achievement = '\t\t$File\t"ez1\\achievements_EZ.cpp"\n'
           if achievement not in text:
               raise SystemExit("Achievement VPC target not found")
           vpc.write_text(text.replace(achievement, '', 1))
