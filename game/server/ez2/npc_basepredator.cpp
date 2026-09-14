@@ -26,6 +26,7 @@ LINK_ENTITY_TO_CLASS( npc_basepredator, CNPC_BasePredator );
 string_t CNPC_BasePredator::gm_iszGooPuddle;
 
 BEGIN_DATADESC( CNPC_BasePredator )
+	DEFINE_KEYFIELD( m_tEzVariant, FIELD_INTEGER, "ezvariant" ),
 	DEFINE_FIELD( m_fCanThreatDisplay, FIELD_BOOLEAN ),
 	DEFINE_FIELD( m_flLastHurtTime, FIELD_TIME ),
 	DEFINE_FIELD( m_flNextSpitTime, FIELD_TIME ),
@@ -61,6 +62,7 @@ END_DATADESC()
 
 CNPC_BasePredator::CNPC_BasePredator()
 {
+	m_tEzVariant = EZ_VARIANT_DEFAULT;
 	// By default, is not a boss
 	m_bIsBoss = false;
 	// Initially can threat display
