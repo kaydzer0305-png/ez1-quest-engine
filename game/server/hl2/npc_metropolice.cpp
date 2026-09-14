@@ -5840,6 +5840,8 @@ DEFINE_SCHEDULE
 	"		COND_ENEMY_DEAD"
 );
 
+AI_END_CUSTOM_NPC()
+
 #ifdef EZ
 CAI_BaseNPC::EyeGlow_t *CNPC_MetroPolice::GetEyeGlowData( int i )
 {
@@ -5866,6 +5868,4 @@ int CNPC_MetroPolice::GetNumGlows()
 	return 0;
 }
 #endif
-
-AI_END_CUSTOM_NPC()
 
