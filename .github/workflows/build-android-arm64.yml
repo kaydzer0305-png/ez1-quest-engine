@@ -11,6 +11,10 @@ on:
         required: false
         default: 'hl2'
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   android-arm64:
     runs-on: ubuntu-22.04
@@ -31,7 +35,7 @@ jobs:
         run: |
           set -e
           AAR="openxr_loader_for_android-${OPENXR_AAR_VERSION}.aar"
-          wget -q "https://repo1.maven.org/maven2/org/khronos/openxr/openxr_loader_for_android/${OPENXR_AAR_VERSION}/${AAR}"
+          wget -q "{{https://repo1.maven.org/maven2/org/khronos/openxr/openxr_loader_for_android/${OPENXR_AAR_VERSION}}}/${AAR}"
           unzip -q "${AAR}" -d openxr-aar
           INC=$(dirname "$(find openxr-aar -name openxr.h | head -1)")
           SO="openxr-aar/prefab/modules/openxr_loader/libs/android.arm64-v8a/libopenxr_loader.so"
@@ -43,7 +47,7 @@ jobs:
           ls -la external/openxr/include/openxr external/openxr/lib/aarch64
           python3 -c 'import struct; d=open("external/openxr/lib/aarch64/libopenxr_loader.so","rb").read(64); assert d[:4]==b"\x7fELF"; m=struct.unpack_from("<H",d,18)[0]; print("ELF e_machine",m); assert m==183, m'
 
-      - name: Configure
+      - name: Select game profile
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             GAMES=ez1
@@ -51,11 +55,43 @@ jobs:
             GAMES="${{ github.event.inputs.build_games }}"
             if [ -z "$GAMES" ]; then GAMES=hl2; fi
           fi
-          echo "Configuring --build-games=$GAMES"
-          ./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns --build-games="$GAMES"
+          echo "GAMES=$GAMES" >> "$GITHUB_ENV"
+          echo "Selected --build-games=$GAMES"
+
+      - name: Configure
+        id: configure
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns --build-games="$GAMES" 2>&1 | tee configure.log
 
       - name: Build
-        run: ./waf build
+        id: build
+        if: steps.configure.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./waf build 2>&1 | tee build.log
+
+      - name: Report EZ1 failure
+        if: always() && github.event_name == 'pull_request' && (steps.configure.outcome == 'failure' || steps.build.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '## EZ1 Android build failure'
+            echo
+            echo 'The tail of the configure/build log is below:'
+            echo
+            echo '```text'
+            if [ -f build.log ]; then tail -n 120 build.log; else tail -n 120 configure.log; fi
+            echo '```'
+          } > pr-build-failure.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file pr-build-failure.md
+
+      - name: Stop after configure/build failure
+        if: always() && (steps.configure.outcome == 'failure' || steps.build.outcome == 'failure')
+        run: exit 1
 
       - name: Build hidapi stub
         run: |
