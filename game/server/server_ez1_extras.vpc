@@ -14,6 +14,7 @@ $Project "Server (Entropy Zero extras)"
 	{
 		$File	"ez1\weapon_ManhackToss.cpp"
 		$File	"ez1\EZ_Achievements_Reset.cpp"
+		$File	"ez1\ez1_link_compat.cpp"
 	}
 	$Folder	"EZ2 (EZ1 maps spawn these)"
 	{
