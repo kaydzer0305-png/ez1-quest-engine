@@ -3,6 +3,11 @@
 //-----------------------------------------------------------------------------
 $Macro SRCDIR		"..\.."
 
+// The waf VPC parser requires every parsed fragment to expose this section.
+$Configuration
+{
+}
+
 $Project "Client (Entropy Zero extras)"
 {
 	$Folder	"Human_Error"
