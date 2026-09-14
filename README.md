@@ -26,12 +26,14 @@ Current status:
 - ✅ EZ1 build profile (`--build-games=ez1`) + Bad Cop Touch extras (kick / NV / manhack).
 - ✅ EZ1 extra VPC lists + import script for EZ1v4.0 unique units.
 - ✅ Quest FFR + 90 Hz request (`EZQUEST_VR_FFR`, `EZQUEST_VR_REFRESH`).
-- 🔬 Remaining: headset-verify stereo/input/FFR, then `#ifdef EZ` hunks + `GAME_PROFILE=ez1`.
+- ✅ Phase 1b `#ifdef EZ` allegiance / NV / bleed / metro glow hunks (CI still `hl2`).
+- ✅ EZ1v4.0 unique units imported under `game/server/{ez1,ez2,mod,Human_Error}` (CI still `hl2`).
+- 🔬 Remaining: headset-verify stereo/input/FFR (see `docs/headset-verify.md`), stunstick+combine leftover hunks, then `GAME_PROFILE=ez1`.
 
 ## Roadmap
 
-1. Headset-verify HL2 **in-headset stereo** (H1/H2 logcat + IPD check).
-2. Copy EZ1v4.0 unique units (`bash scripts/import-ez1-sources.sh`) and merge `#ifdef EZ` hunks.
+1. Headset-verify HL2 **in-headset stereo** (H1/H2 logcat + IPD check). See `docs/headset-verify.md`.
+2. Merge leftover `#ifdef EZ` hunks (stunstick charge, Combine Mapbase ally-squad).
 3. Flip `com.ezquest.engine.GAME_PROFILE` to `ez1` once `/sdcard/srceng/ez1` exists.
 4. Tune FFR level / `EZQUEST_XR_RES_SCALE` on-device.
 
@@ -44,6 +46,7 @@ Current status:
 
 See `docs/vr-integration.md` for the Java/native contract and engine seam.
 See `docs/ez1-merge.md` for the Entropy: Zero 1 game-code merge.
+See `docs/headset-verify.md` for the on-device stereo / Touch / FFR checklist.
 
 ## Legal notes
 

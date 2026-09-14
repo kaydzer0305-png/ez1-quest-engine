@@ -463,6 +463,11 @@ private:
 
 	static float	gm_flTimeLastSpokePeek;
 
+#ifdef EZ
+	virtual CAI_BaseNPC::EyeGlow_t *GetEyeGlowData( int i );
+	virtual int			GetNumGlows();
+#endif
+
 public:
 	DEFINE_CUSTOM_AI;
 };

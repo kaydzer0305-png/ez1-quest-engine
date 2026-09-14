@@ -1,0 +1,46 @@
+--- a/game/server/ai_basenpc.h
++++ b/game/server/ai_basenpc.h
+@@ -40,6 +40,7 @@
+ 
+ #define PLAYER_SQUADNAME "player_squad"
+ 
++class CSprite;
+ class CAI_Schedule;
+ class CAI_Network;
+ class CAI_Route;
+@@ -2123,6 +2124,35 @@
+ 	void				GetPlayerAvoidBounds( Vector *pMins, Vector *pMaxs );
+ 
+ 	void				StartPingEffect( void ) { m_flTimePingEffect = gpGlobals->curtime + 2.0f; DispatchUpdateTransmitState(); }
++
++#ifdef EZ
++public:
++	struct EyeGlow_t
++	{
++		EyeGlow_t()
++		{
++			red = 0; green = 0; blue = 0; scale = 0; alpha = 0;
++			renderMode = kRenderTransAdd; brightness = 0; proxyScale = 0.0f;
++			spriteName = NULL; attachment = NULL;
++		}
++		int red, green, blue, alpha;
++		RenderMode_t renderMode;
++		float brightness, scale, proxyScale;
++		const char *spriteName;
++		const char *attachment;
++	};
++
++protected:
++	CSprite		*m_pEyeGlow;
++	bool		m_bNoGlow;
++
++	virtual void		StartEye( void );
++	virtual void		KillSprites( float flDelay );
++	virtual CSprite		*GetGlowSpritePtr( int i );
++	virtual void		SetGlowSpritePtr( int i, CSprite *sprite );
++	virtual EyeGlow_t	*GetEyeGlowData( int i ) { return NULL; }
++	virtual int			GetNumGlows() { return 1; }
++#endif
+ };
+ 
+ 

@@ -71,3 +71,19 @@ after that folder exists on the headset.
 
 Visor HUD: keep the 2D visor **off** in VR for now (stereo dissonance). Treat
 that as a follow-up after in-headset stereo is confirmed.
+
+## Phase 1b status (ported onto this nillerusr tree)
+
+Landed behind `#ifdef EZ` / `#ifdef EZ1` so `--build-games=hl2` is unchanged:
+
+- `game/shared/hl2/hl2_gamerules.cpp` + `.h` — Combine allegiance (Bad Cop is `CLASS_PLAYER` allied with Combine / Metro / manhack / scanner), rebel/vort/hacked-mine hostility, `Manhack` ammo, `OnSkillLevelChanged`.
+- `game/server/hl2/hl2_player.cpp` + `.h` — infinite aux default, flashlight-as-NV skips vehicles, stunstick is keepable, squad-marker cleanup.
+- `game/server/ai_basenpc.cpp` + `.h` — SP player bleed, eye-glow sprite API (`noglow` keyfield).
+- `game/server/hl2/npc_metropolice.cpp` + `.h` — `weapon_smg2` proficiency + NVG eye glow.
+
+Still manual / not in this pass:
+
+- `game/shared/hl2mp/weapon_stunstick.cpp` — EZ charge / `m_bInSwing` / projected-texture need the EZ1v4.0 stunstick header members. Pickup policy is already in `Weapon_CanUse`.
+- `game/server/hl2/npc_combine.cpp` — 40+ Mapbase/EZ ally-squad hunks depend on the EZ combine header surface (follow behavior, elite inputs, etc.). Gamerules allegiance is what stops Combine shooting Bad Cop for now.
+- Unique units from EZ1v4.0 are in-tree (`game/server/ez1`, `ez2`, `mod`, `Human_Error`, `game/client/Human_Error`). They are compiled only with `--build-games=ez1`.
+- Do not flip `GAME_PROFILE` or CI `--build-games` until those units exist and an `ez1` link is green.
