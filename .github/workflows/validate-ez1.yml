@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
 
       - name: Configure and build EZ1 with diagnostics
         env:
@@ -27,6 +27,11 @@ jobs:
 
           run_validation() {
             set -euxo pipefail
+
+            echo '::group::Checkout top-level dependencies'
+            git submodule sync
+            git submodule update --init --depth 1
+            echo '::endgroup::'
 
             echo '::group::Install Android NDK r20b'
             wget https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
