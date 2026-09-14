@@ -1,55 +1,54 @@
 # Headset verification checklist (Quest 3S)
 
-Software on `master` / Phase 1b cannot prove stereo, IPD, Touch mapping, or FFR.
-Run this after sideloading the CI APK. Keep `GAME_PROFILE=hl2` until `/sdcard/srceng/ez1` exists.
+This is the gate before flipping `GAME_PROFILE` to `ez1`. Run it after sideloading the CI `SourceQuest.apk`. Tracked as issue #22.
 
-## 1. Install
-
-1. Dispatch workflow `build-android-arm64` (default `--build-games=hl2`).
-2. Sideload the signed debug APK.
-3. Confirm content at `/sdcard/srceng/hl2` + `platform` (pre-20th-anniversary `steam_legacy`).
-
-## 2. Boot
-
-Set `BOOT_MODE=vr`. Expect `EngineActivity` to present within 20s; otherwise it falls back to `ValveActivity2`.
+## Content layout
 
 ```
-adb logcat -s EZQuest-VR EZQuest-VR-Input EZQuest-VR-Engine EZQuest-VR-Present EZQuest-SourceVR EZQuest-VR-FFR
+/sdcard/srceng/hl2/gameinfo.txt
+/sdcard/srceng/hl2/hl2_misc_dir.vpk
+/sdcard/srceng/hl2/hl2_pak_dir.vpk
+/sdcard/srceng/platform/
 ```
 
-Pass if you see:
+Optional EZ1 content (do not flip the profile until stereo is confirmed on HL2):
 
-- `EZQuest-SourceVR: RT _rt_ezquest_eye_left` (slice H1)
-- `submit eye=0/1 via bound RT` (slice H2)
-- `EZQuest-VR-FFR: FFR level=2 applied to 2/2 eyes`
-- refresh request 90
+```
+/sdcard/srceng/ez1/gameinfo.txt
+/sdcard/srceng/episodic/
+/sdcard/srceng/ep2/
+```
 
-## 3. Stereo / IPD
+Use pre-20th-anniversary HL2 (`steam_legacy`). Own the games; nothing from Steam is committed here.
 
-Stand in a hallway with vertical geometry. Each eye must have a distinct view (not a mono blit). If both eyes match, H2 bind is still flattening; dump `EZQuestVrStereoEyesReady()`.
+## How to run
 
-## 4. Touch
+1. Dispatch `build-android-arm64` with `build_games=hl2`.
+2. Sideload `SourceQuest.apk` and set `BOOT_MODE=vr`.
+3. With `adb` connected to the Quest 3S:
 
-| Control | Expect |
-| --- | --- |
-| Left stick | move |
-| Left stick click | sprint |
-| Right stick flick | 30° snap-turn |
-| Right stick click | `invnext` |
-| Triggers | attack |
-| A / X tap | jump |
-| A / X hold ~0.5s | flashlight / NV (`impulse 100`) |
-| B / Y | reload |
-| Left grip + trigger | use |
-| Left grip + right trigger | kick (`+alt1`) |
-| Left grip + right stick click | manhack (`slot5`) |
+```bash
+bash scripts/headset-verify.sh --check
+bash scripts/headset-verify.sh --once 25
+bash scripts/headset-verify.sh
+```
 
-## 5. FFR / resolution knobs
+## Pass criteria
 
-`EZQUEST_VR_FFR_LEVEL` 0–4 (default 2). `EZQUEST_XR_RES_SCALE` 0.25–2.0 (default 1.0). `EZQUEST_VR_REFRESH` default 90. Tune only after stereo is confirmed.
+1. **Stereo RTs**
+   - `EZQuest-SourceVR: RT _rt_ezquest_eye_left`
+   - `EZQuest-SourceVR: RT _rt_ezquest_eye_right`
+   - `submit eye=0/1 via bound RT` (slice H2)
+   - In-headset true IPD: covering one eye must visibly shift the scene.
+2. **Input**
+   - Left stick walks; triggers fire; A/X jumps; grips use secondary action.
+   - Right-stick flick snap-turns about 30°.
+   - Right-stick click cycles weapons.
+3. **FFR / refresh**
+   - `EZQuest-VR-FFR: FFR level=2 applied to 2/2 eyes`
+   - The session requests 90 Hz.
+4. **Comfort**
+   - No mono/post-process flattening after several minutes in-map.
+   - If performance is poor, try `EZQUEST_XR_RES_SCALE=0.75` before changing FFR.
 
-## 6. After HL2 stereo is good
-
-1. Sideload Entropy: Zero to `/sdcard/srceng/ez1`.
-2. Merge leftover stunstick / combine hunks if needed.
-3. Dispatch CI with `--build-games=ez1` and flip `com.ezquest.engine.GAME_PROFILE` to `ez1`.
+Paste the `--once` summary into issue #22. Do not set `GAME_PROFILE=ez1` until this passes.
