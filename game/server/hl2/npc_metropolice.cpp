@@ -4954,6 +4954,12 @@ WeaponProficiency_t CNPC_MetroPolice::CalcWeaponProficiency( CBaseCombatWeapon *
 	{
 		return WEAPON_PROFICIENCY_VERY_GOOD;
 	}
+#ifdef EZ
+	if ( FClassnameIs( pWeapon, "weapon_smg2" ) )
+	{
+		return WEAPON_PROFICIENCY_AVERAGE;
+	}
+#endif
 
 	return BaseClass::CalcWeaponProficiency( pWeapon );
 }
@@ -5833,6 +5839,33 @@ DEFINE_SCHEDULE
 	"		COND_NEW_ENEMY"
 	"		COND_ENEMY_DEAD"
 );
+
+#ifdef EZ
+CAI_BaseNPC::EyeGlow_t *CNPC_MetroPolice::GetEyeGlowData( int i )
+{
+	if ( i != 0 )
+		return NULL;
+
+	static CAI_BaseNPC::EyeGlow_t eyeGlow;
+	eyeGlow.spriteName = "sprites/light_glow02.vmt";
+	eyeGlow.attachment = "eyes";
+	eyeGlow.alpha = 100;
+	eyeGlow.red = 0;
+	eyeGlow.green = 255;
+	eyeGlow.blue = 255;
+	eyeGlow.scale = 0.3f;
+	eyeGlow.proxyScale = 3.0f;
+	eyeGlow.renderMode = kRenderGlow;
+	return &eyeGlow;
+}
+
+int CNPC_MetroPolice::GetNumGlows()
+{
+	if ( m_nSkin == 1 )
+		return 1;
+	return 0;
+}
+#endif
 
 AI_END_CUSTOM_NPC()
 

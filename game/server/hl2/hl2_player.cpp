@@ -101,7 +101,11 @@ ConVar player_showpredictedposition_timestep( "player_showpredictedposition_time
 ConVar player_squad_transient_commands( "player_squad_transient_commands", "1", FCVAR_REPLICATED );
 ConVar player_squad_double_tap_time( "player_squad_double_tap_time", "0.25" );
 
+#ifdef EZ
+ConVar sv_infinite_aux_power( "sv_infinite_aux_power", "1", FCVAR_CHEAT );
+#else
 ConVar sv_infinite_aux_power( "sv_infinite_aux_power", "0", FCVAR_CHEAT );
+#endif
 
 ConVar autoaim_unlock_target( "autoaim_unlock_target", "0.8666" );
 
@@ -2027,6 +2031,11 @@ void CHL2_Player::FlashlightTurnOn( void )
 {
 	if( m_bFlashlightDisabled )
 		return;
+#ifdef EZ
+	// Flashlight is NVG for Bad Cop; do not toggle it inside a vehicle.
+	if ( IsInAVehicle() )
+		return;
+#endif
 
 	if ( Flashlight_UseLegacyVersion() )
 	{
@@ -2249,7 +2258,22 @@ void CHL2_Player::OnSquadMemberKilled( inputdata_t &data )
 	user.MakeReliable();
 	UserMessageBegin( user, "SquadMemberDied" );
 	MessageEnd();
+#ifdef EZ
+	CleanUpSquadMarker();
+#endif
 }
+
+#ifdef EZ
+void CHL2_Player::CleanUpSquadMarker( void )
+{
+	if ( GetSquadCommandRepresentative() != NULL && GetNumSquadCommandables() > 1 )
+		return;
+
+	CBaseEntity *pCommandPointProp = gEntList.FindEntityByClassname( NULL, "prop_command_point" );
+	if ( pCommandPointProp )
+		UTIL_Remove( pCommandPointProp );
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -2630,12 +2654,22 @@ int CHL2_Player::GiveAmmo( int nCount, int nAmmoIndex, bool bSuppressSound)
 bool CHL2_Player::Weapon_CanUse( CBaseCombatWeapon *pWeapon )
 {
 #ifndef HL2MP	
+#ifdef EZ
+	// Keep a stunstick if we don't already own one; extra sticks still become battery.
+	if ( pWeapon->ClassMatches( "weapon_stunstick" ) && Weapon_OwnsThisType( "weapon_stunstick" ) )
+	{
+		if ( ApplyBattery( 0.5 ) )
+			UTIL_Remove( pWeapon );
+		return false;
+	}
+#else
 	if ( pWeapon->ClassMatches( "weapon_stunstick" ) )
 	{
 		if ( ApplyBattery( 0.5 ) )
 			UTIL_Remove( pWeapon );
 		return false;
 	}
+#endif
 #endif
 
 	return BaseClass::Weapon_CanUse( pWeapon );
