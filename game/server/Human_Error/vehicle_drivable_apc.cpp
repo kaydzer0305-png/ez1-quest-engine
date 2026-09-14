@@ -99,6 +99,12 @@ static void KillBlockingEnemyNPCs( CBasePlayer *pPlayer, CBaseEntity *pVehicleEn
 
 int HLSS_SelectTargetType(CBaseEntity *pEntity);
 
+static Disposition_t PlayerDispositionToClass( Class_T targetClass )
+{
+	CBasePlayer *pPlayer = UTIL_GetLocalPlayer();
+	return pPlayer ? pPlayer->GetDefaultRelationshipDisposition( targetClass ) : D_NU;
+}
+
 BEGIN_DATADESC( CPropDrivableAPC )
 	DEFINE_FIELD( m_flDangerSoundTime, FIELD_TIME ),
 	DEFINE_FIELD( m_vecGunOrigin, FIELD_POSITION_VECTOR ),
@@ -342,7 +348,7 @@ void CPropDrivableAPC::TraceAttack( const CTakeDamageInfo &inputInfo, const Vect
 	CTakeDamageInfo info = inputInfo;
 
 	if (info.GetAttacker() && info.GetAttacker()->MyNPCPointer() && info.GetAttacker()->IsAlive() &&
-		CBaseCombatCharacter::GetDefaultRelationshipDispositionBetweenClasses( CLASS_PLAYER, info.GetAttacker()->Classify() ) != D_LI )
+		PlayerDispositionToClass( info.GetAttacker()->Classify() ) != D_LI )
 	{
 		if (!m_hTarget || m_flTargetSelectTime < gpGlobals->curtime)
 		{
@@ -591,7 +597,7 @@ void CPropDrivableAPC::AimGunAt( Vector *endPos, float flInterval )
 			SetLaserDotTarget( m_hLaserDot, NULL );
 		}*/
 
-		if (tr.m_pEnt && tr.m_pEnt->MyNPCPointer() && CBaseCombatCharacter::GetDefaultRelationshipDispositionBetweenClasses( CLASS_PLAYER, tr.m_pEnt->Classify() ) == D_HT )
+		if (tr.m_pEnt && tr.m_pEnt->MyNPCPointer() && PlayerDispositionToClass( tr.m_pEnt->Classify() ) == D_HT )
 		{
 			SetLaserDotTarget( m_hLaserDot, tr.m_pEnt );
 
@@ -627,7 +633,7 @@ void CPropDrivableAPC::AimGunAt( Vector *endPos, float flInterval )
 	// Update the rocket target
 	CreateAPCLaserDot();
 
-	if (!DoesLaserDotHaveTarget( m_hLaserDot ))
+	if ( m_flLaserTargetTime < gpGlobals->curtime )
 	{
 		m_hLaserDot->SetAbsOrigin( *endPos );
 	}
