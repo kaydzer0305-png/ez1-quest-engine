@@ -14,9 +14,6 @@ $Project "Client (Entropy Zero extras)"
 	{
 		$File	"Human_Error\c_vehicle_drivable_apc.cpp"
 	}
-	$Folder	"EZ particles"
-	{
-		$File	"particles_ez.cpp"
-		$File	"particles_ez.h"
-	}
+
+	// particles_ez.cpp/.h already come from client_base.vpc.
 }
