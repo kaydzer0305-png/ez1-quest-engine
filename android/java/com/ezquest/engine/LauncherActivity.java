@@ -34,6 +34,8 @@ public class LauncherActivity extends Activity {
     public static final String META_BOOT_MODE = "com.ezquest.engine.BOOT_MODE";
 
     private boolean mEngineStarted;
+    private boolean mResumed;
+    private boolean mFocused;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,19 +51,61 @@ public class LauncherActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Defer the engine start until this activity is visible/resumed.
-        // Starting EngineActivity from onCreate races window attach and the
-        // system logs a BAL-hardening warning (caller has no visible window);
-        // a background-started activity may never gain VR focus, leaving the
-        // OpenXR session stuck at READY (0 -> 1 -> 2, never VISIBLE/FOCUSED)
-        // with 0 frames presented. Posting here guarantees a visible window.
-        if (!mEngineStarted) {
-            mEngineStarted = true;
-            getWindow().getDecorView().post(this::startEngineOnceContentOk);
+        mResumed = true;
+        // Prefer starting the engine once this activity actually holds window
+        // focus: a start issued while we have no visible window is treated as
+        // a background start (BAL-hardening warning) and the OpenXR session
+        // then sticks at READY forever with 0 frames. Fall back to a timed
+        // start so a missing focus event can never hang us on this panel.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (!mEngineStarted && mResumed) {
+                mEngineStarted = true;
+                Log.w(TAG, "launcher: starting engine without window focus (timeout)");
+                startEngineOnceContentOk("timeout-without-focus");
+            }
+        }, 3000);
+        tryStartEngine("resume");
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        mFocused = hasFocus;
+        if (hasFocus) {
+            tryStartEngine("focus");
         }
     }
 
-    private void startEngineOnceContentOk() {
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mResumed = false;
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        // The engine activity now covers us: it owns the foreground, so it is
+        // safe to go away. Finishing here (instead of right after
+        // startActivity) keeps a live, visible caller on record while the
+        // system processes the engine start; finishing eagerly lets the start
+        // be classified as a background start (BAL warning, inVisibleTask:
+        // false) and the OpenXR session then never reaches VISIBLE/FOCUSED.
+        if (mEngineStarted) {
+            finish();
+        }
+    }
+
+    private void tryStartEngine(String why) {
+        if (mEngineStarted || !mResumed || !mFocused) {
+            return;
+        }
+        mEngineStarted = true;
+        Log.i(TAG, "launcher: starting engine on window " + why);
+        startEngineOnceContentOk("window-" + why);
+    }
+
+    private void startEngineOnceContentOk(String trigger) {
         // Content gate: missing layout -> importer (which returns the user
         // here on relaunch); present -> engine.
         if (ContentRouter.routeIfNeeded(this)) {
@@ -71,7 +115,7 @@ public class LauncherActivity extends Activity {
         }
 
         String bootMode = bootMode();
-        Log.i(TAG, "launcher: content OK, boot mode " + bootMode);
+        Log.i(TAG, "launcher: content OK, boot mode " + bootMode + " (trigger=" + trigger + ")");
         try {
             Intent engine;
             if ("vr".equals(bootMode)) {
@@ -90,7 +134,17 @@ public class LauncherActivity extends Activity {
         } catch (Exception e) {
             Log.e(TAG, "launcher: could not start engine", e);
         }
-        finish();
+        // Do NOT finish() here: the system processes the start asynchronously
+        // and an already-finished caller makes it a background start (the XR
+        // session then sticks at READY, loading screen forever). We finish in
+        // onStop once the engine covers us, with a timeout fallback so a
+        // failed start can never strand us on this panel.
+        getWindow().getDecorView().postDelayed(() -> {
+            if (!isFinishing()) {
+                Log.w(TAG, "launcher: engine did not cover us; finishing anyway");
+                finish();
+            }
+        }, 10000);
     }
 
     /** BOOT_MODE meta-data, defaulting to flat (the verified baseline). */
