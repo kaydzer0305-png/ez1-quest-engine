@@ -28,7 +28,7 @@
 #include "hl2_gamerules.h"
 #endif // HL2_DLL
 #ifdef EZ
-#include "sprite.h"
+#include "Sprite.h"
 #endif
 
 #include "ai_network.h"
