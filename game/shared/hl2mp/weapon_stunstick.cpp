@@ -14,6 +14,9 @@
 #ifndef CLIENT_DLL
 	#include "npc_metropolice.h"
 	#include "te_effect_dispatch.h"
+	#ifdef EZ
+		#include "in_buttons.h"
+	#endif
 #endif
 
 #ifdef CLIENT_DLL
@@ -73,6 +76,13 @@ public:
 
 	virtual void Precache();
 
+#ifdef EZ
+	virtual void PrimaryAttack( void );
+#ifndef CLIENT_DLL
+	virtual void ItemPostFrame( void );
+#endif
+#endif
+
 	void		Spawn();
 
 	float		GetRange( void )		{ return STUNSTICK_RANGE; }
@@ -84,7 +94,11 @@ public:
 	
 	void		Drop( const Vector &vecVelocity );
 	void		ImpactEffect( trace_t &traceHit );
+#ifdef EZ
+	void		SecondaryAttack( void );
+#else
 	void		SecondaryAttack( void )	{}
+#endif
 	void		SetStunState( bool state );
 	bool		GetStunState( void );
 
@@ -94,6 +108,10 @@ public:
 #endif
 	
 	float		GetDamageForActivity( Activity hitActivity );
+
+#ifdef EZ
+	bool		InSwing( void );
+#endif
 
 	CWeaponStunStick( const CWeaponStunStick & );
 
@@ -115,7 +133,9 @@ private:
 	void	DrawFirstPersonEffects( void );
 	void	DrawThirdPersonEffects( void );
 	void	DrawEffects( void );
+#ifndef EZ
 	bool	InSwing( void );
+#endif
 
 	bool	m_bSwungLastFrame;
 
@@ -126,6 +146,13 @@ private:
 #endif
 
 	CNetworkVar( bool, m_bActive );
+#ifdef EZ
+	CNetworkVar( bool, m_bInSwing );
+#ifndef CLIENT_DLL
+	float		m_flLastChargeTime;
+	float		m_flChargeAmount;
+#endif
+#endif
 };
 
 //-----------------------------------------------------------------------------
@@ -136,14 +163,29 @@ IMPLEMENT_NETWORKCLASS_ALIASED( WeaponStunStick, DT_WeaponStunStick )
 BEGIN_NETWORK_TABLE( CWeaponStunStick, DT_WeaponStunStick )
 #ifdef CLIENT_DLL
 	RecvPropInt( RECVINFO( m_bActive ) ),
+#ifdef EZ
+	RecvPropInt( RECVINFO( m_bInSwing ) ),
+#endif
 #else
 	SendPropInt( SENDINFO( m_bActive ), 1, SPROP_UNSIGNED ),
+#ifdef EZ
+	SendPropInt( SENDINFO( m_bInSwing ), 1, SPROP_UNSIGNED ),
+#endif
 #endif
 
 END_NETWORK_TABLE()
 
 BEGIN_PREDICTION_DATA( CWeaponStunStick )
 END_PREDICTION_DATA()
+
+#ifndef CLIENT_DLL
+#ifdef EZ
+BEGIN_DATADESC( CWeaponStunStick )
+	DEFINE_FIELD( m_flLastChargeTime, FIELD_TIME ),
+	DEFINE_FIELD( m_flChargeAmount, FIELD_FLOAT ),
+END_DATADESC()
+#endif
+#endif
 
 LINK_ENTITY_TO_CLASS( weapon_stunstick, CWeaponStunStick );
 PRECACHE_WEAPON_REGISTER( weapon_stunstick );
@@ -176,6 +218,13 @@ CWeaponStunStick::CWeaponStunStick( void )
 	// HACK:  Don't call SetStunState because this tried to Emit a sound before
 	//  any players are connected which is a bug
 	m_bActive = false;
+#ifdef EZ
+	m_bInSwing = false;
+#ifndef CLIENT_DLL
+	m_flLastChargeTime = 0.0f;
+	m_flChargeAmount = 0.0f;
+#endif
+#endif
 
 #ifdef CLIENT_DLL
 	m_bSwungLastFrame = false;
@@ -213,8 +262,90 @@ void CWeaponStunStick::Precache()
 //-----------------------------------------------------------------------------
 float CWeaponStunStick::GetDamageForActivity( Activity hitActivity )
 {
+#ifdef EZ
+#ifndef CLIENT_DLL
+	// EZ1's charged stunstick scales the normal melee damage quadratically,
+	// with a 40-damage floor and a 4000-damage ceiling.
+	const float flChargeMultiplier = MIN( MAX( (m_flChargeAmount * m_flChargeAmount) * 1.5f, 1.0f ), 100.0f );
+	return 40.0f * flChargeMultiplier;
+#else
 	return 40.0f;
+#endif
+#else
+	return 40.0f;
+#endif
 }
+
+#ifdef EZ
+
+// The nillerusr bludgeon base keeps its hit routine private, so the EZ1
+// behavior is implemented at the weapon seam: the base swing already calls
+// the virtual damage hook, and these methods own the charge lifecycle.
+void CWeaponStunStick::PrimaryAttack( void )
+{
+	BaseClass::PrimaryAttack();
+#ifndef CLIENT_DLL
+	m_flChargeAmount = 0.0f;
+	m_flLastChargeTime = 0.0f;
+#endif
+}
+
+#ifndef CLIENT_DLL
+void CWeaponStunStick::ItemPostFrame( void )
+{
+	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
+	if ( pOwner == NULL )
+		return;
+
+	// Release attack2, press attack, or a three-second safety timeout commits
+	// the charged swing. This mirrors the EZ1 input contract without changing
+	// the HL2/HL2MP default path.
+	if ( m_flChargeAmount > 0.0f &&
+		( !( pOwner->m_nButtons & IN_ATTACK2 ) ||
+		  ( pOwner->m_nButtons & IN_ATTACK ) ||
+		  m_flChargeAmount > 3.0f ) )
+	{
+		if ( m_flNextPrimaryAttack <= gpGlobals->curtime )
+		{
+			PrimaryAttack();
+		}
+		else
+		{
+			m_flChargeAmount = 0.0f;
+			m_flLastChargeTime = 0.0f;
+		}
+	}
+
+	BaseClass::ItemPostFrame();
+	m_bInSwing = InSwing();
+}
+#endif
+
+void CWeaponStunStick::SecondaryAttack( void )
+{
+#ifndef CLIENT_DLL
+	if ( m_flLastChargeTime > 0.0f )
+	{
+		m_flChargeAmount += gpGlobals->curtime - m_flLastChargeTime;
+	}
+	else
+	{
+		WeaponSound( SPECIAL1 );
+	}
+	m_flLastChargeTime = gpGlobals->curtime;
+#endif
+}
+
+bool CWeaponStunStick::InSwing( void )
+{
+#ifndef CLIENT_DLL
+	return m_flChargeAmount > 0.0f;
+#else
+	return m_bInSwing;
+#endif
+}
+
+#endif // EZ
 
 //-----------------------------------------------------------------------------
 // Attempt to lead the target (needed because citizens can't hit manhacks with the crowbar!)
@@ -672,6 +803,7 @@ RenderGroup_t C_WeaponStunStick::GetRenderGroup( void )
 //-----------------------------------------------------------------------------
 // Purpose: Tells us we're always a translucent entity
 //-----------------------------------------------------------------------------
+#ifndef EZ
 bool C_WeaponStunStick::InSwing( void )
 {
 	int activity = GetActivity();
@@ -689,6 +821,7 @@ bool C_WeaponStunStick::InSwing( void )
 
 	return false;
 }
+#endif // !EZ
 
 //-----------------------------------------------------------------------------
 // Purpose: Draw our special effects
