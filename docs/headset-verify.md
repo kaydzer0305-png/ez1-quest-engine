@@ -29,6 +29,7 @@ Use pre-20th-anniversary HL2 (`steam_legacy`). Own the games; nothing from Steam
 
 ```bash
 bash scripts/headset-verify.sh --check
+bash scripts/headset-verify.sh --config
 bash scripts/headset-verify.sh --once 25
 bash scripts/headset-verify.sh
 ```
