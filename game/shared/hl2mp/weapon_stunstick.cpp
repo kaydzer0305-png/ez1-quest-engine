@@ -10,14 +10,19 @@
 #include "weapon_hl2mpbasebasebludgeon.h"
 #include "IEffects.h"
 #include "debugoverlay_shared.h"
+#include "in_buttons.h"
 
 #ifndef CLIENT_DLL
 	#include "npc_metropolice.h"
 	#include "te_effect_dispatch.h"
+	#ifdef EZ
+		#include "RagdollBoogie.h"
+		#include "rumble_shared.h"
+		#include "gamestats.h"
+	#endif
 #endif
 
 #ifdef CLIENT_DLL
-	
 	#include "iviewrender_beams.h"
 	#include "beam_shared.h"
 	#include "materialsystem/imaterial.h"
@@ -28,6 +33,10 @@
 
 	extern void DrawHalo( IMaterial* pMaterial, const Vector &source, float scale, float const *color, float flHDRColorScale );
 	extern void FormatViewModelAttachment( Vector &vOrigin, bool bInverse );
+
+#ifdef EZ
+	#include "flashlighteffect.h"
+#endif
 
 #endif
 
@@ -59,6 +68,9 @@ public:
 	DECLARE_PREDICTABLE();
 
 #ifndef CLIENT_DLL
+#ifdef EZ
+	DECLARE_DATADESC();
+#endif
 	DECLARE_ACTTABLE();
 #endif
 
@@ -84,11 +96,22 @@ public:
 	
 	void		Drop( const Vector &vecVelocity );
 	void		ImpactEffect( trace_t &traceHit );
+#ifndef EZ
 	void		SecondaryAttack( void )	{}
+#endif
 	void		SetStunState( bool state );
 	bool		GetStunState( void );
 
 #ifndef CLIENT_DLL
+#ifdef EZ
+	virtual void	ItemPostFrame( void );
+	void			SecondaryAttack( void );
+	void			Hit( trace_t &traceHit, Activity nHitActivity, bool bIsSecondary );
+private:
+	// Fields for chargeup attack
+	float m_flLastChargeTime;
+	float m_flChargeAmount;
+#endif
 	void		Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator );
 	int			WeaponMeleeAttack1Condition( float flDot, float flDist );
 #endif
@@ -98,6 +121,10 @@ public:
 	CWeaponStunStick( const CWeaponStunStick & );
 
 private:
+
+#ifdef EZ
+	bool	InSwing(void); // Moved from client to be shared with client and server
+#endif
 
 #ifdef CLIENT_DLL
 
@@ -115,7 +142,9 @@ private:
 	void	DrawFirstPersonEffects( void );
 	void	DrawThirdPersonEffects( void );
 	void	DrawEffects( void );
+#ifndef EZ // Moved to be shared with server and client
 	bool	InSwing( void );
+#endif
 
 	bool	m_bSwungLastFrame;
 
@@ -123,9 +152,20 @@ private:
 
 	float	m_flFadeTime;
 
+#ifdef EZ
+	// EZ1 charge-glow projected texture (dormant until Simulate() ports;
+	// kept here so m_bInSwing networking above has its matching members).
+	float m_flLastMuzzleFlashTime;
+	class CFlashlightEffect *m_pStunstickLight;
+	void Simulate( void );
+#endif
+
 #endif
 
 	CNetworkVar( bool, m_bActive );
+#ifdef EZ
+	CNetworkVar( bool, m_bInSwing );
+#endif
 };
 
 //-----------------------------------------------------------------------------
@@ -136,8 +176,14 @@ IMPLEMENT_NETWORKCLASS_ALIASED( WeaponStunStick, DT_WeaponStunStick )
 BEGIN_NETWORK_TABLE( CWeaponStunStick, DT_WeaponStunStick )
 #ifdef CLIENT_DLL
 	RecvPropInt( RECVINFO( m_bActive ) ),
+	#ifdef EZ
+		RecvPropInt( RECVINFO( m_bInSwing ) ),
+	#endif
 #else
 	SendPropInt( SENDINFO( m_bActive ), 1, SPROP_UNSIGNED ),
+	#ifdef EZ
+		SendPropInt( SENDINFO( m_bInSwing ), 1, SPROP_UNSIGNED ),
+	#endif
 #endif
 
 END_NETWORK_TABLE()
@@ -150,6 +196,13 @@ PRECACHE_WEAPON_REGISTER( weapon_stunstick );
 
 
 #ifndef CLIENT_DLL
+
+#ifdef EZ
+BEGIN_DATADESC( CWeaponStunStick )
+	DEFINE_FIELD( m_flLastChargeTime, FIELD_TIME ),
+	DEFINE_FIELD( m_flChargeAmount, FIELD_FLOAT ),
+END_DATADESC()
+#endif
 
 acttable_t	CWeaponStunStick::m_acttable[] = 
 {
@@ -176,6 +229,11 @@ CWeaponStunStick::CWeaponStunStick( void )
 	// HACK:  Don't call SetStunState because this tried to Emit a sound before
 	//  any players are connected which is a bug
 	m_bActive = false;
+
+#ifdef EZ
+	m_flLastChargeTime = gpGlobals->curtime;
+	m_flChargeAmount = 0.0f;
+#endif
 
 #ifdef CLIENT_DLL
 	m_bSwungLastFrame = false;
@@ -204,6 +262,14 @@ void CWeaponStunStick::Precache()
 	PrecacheModel( "sprites/light_glow02_add.vmt" );
 	PrecacheModel( "effects/blueflare1.vmt" );
 	PrecacheModel( "sprites/light_glow02_add_noz.vmt" );
+
+#ifdef EZ
+	PrecacheScriptSound( "Weapon_StunStick.ChargeUp" );
+	PrecacheScriptSound( "Weapon_StunStick.ChargeDown" );
+	PrecacheScriptSound( "Weapon_StunStick.ChargeShoot" );
+
+	PrecacheScriptSound( "stunstick_charge_loop" );
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -410,6 +476,102 @@ void CWeaponStunStick::Operator_HandleAnimEvent( animevent_t *pEvent, CBaseComba
 			break;
 	}
 }
+
+#ifdef EZ
+//-----------------------------------------------------------------------------
+// Purpose:
+//-----------------------------------------------------------------------------
+bool CWeaponStunStick::InSwing(void)
+{
+	if ( GetActivity() == ACT_VM_HITCENTER ||
+		 GetActivity() == ACT_VM_SWINGHARD ||
+		 GetActivity() == ACT_VM_MISSCENTER )
+	{
+		return true;
+	}
+	return false;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:
+//-----------------------------------------------------------------------------
+void CWeaponStunStick::ItemPostFrame(void)
+{
+	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
+
+	if ( pOwner )
+	{
+		if ( m_flNextPrimaryAttack <= gpGlobals->curtime )
+		{
+			PrimaryAttack();
+			return;
+		}
+		else if ( !( pOwner->m_nButtons & ( IN_ATTACK2 ) ) && ( pOwner->m_afButtonPressed & IN_ATTACK2 ) && ( m_flNextSecondaryAttack <= gpGlobals->curtime ) )
+		{
+			SecondaryAttack();
+			return;
+		}
+	}
+
+	BaseClass::ItemPostFrame();
+	m_bInSwing = InSwing();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Activate the stick's charge
+//-----------------------------------------------------------------------------
+void CWeaponStunStick::SecondaryAttack()
+{
+	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
+	if ( !pOwner )
+	{
+		return;
+	}
+
+	if ( InSwing() )
+		return;
+
+	// RC: Make sure we did a bigger swing
+	if ( m_flChargeAmount <= 0.1f && m_bActive )
+	{
+		if ( m_flNextPrimaryAttack > gpGlobals->curtime )
+			m_flChargeAmount = 0.0;
+		else
+			m_flChargeAmount = 1.0;
+	}
+	else
+	{
+		m_flChargeAmount = 1.0;
+	}
+
+	m_flChargeAmount = clamp( m_flChargeAmount, 0.0f, 3.0f );
+
+	m_flNextPrimaryAttack = gpGlobals->curtime + GetFireRate() * 1.6f;
+	m_flNextSecondaryAttack = gpGlobals->curtime + GetFireRate() * 2.0f;
+
+	// Don't attack if we're not active
+	if ( !m_bActive )
+	{
+		SendWeaponAnim( ACT_VM_MISSCENTER2 );
+		WeaponSound( SINGLE );
+		EmitSound( "Weapon_StunStick.ChargeDown" );
+
+		m_flNextSecondaryAttack = gpGlobals->curtime + SequenceDuration();
+		return;
+	}
+
+	EmitSound( "Weapon_StunStick.ChargeUp" );
+
+	SetStunState( false );
+
+	SendWeaponAnim( ACT_VM_MISSCENTER2 );
+
+	WeaponSound( SINGLE );
+	m_flLastChargeTime = gpGlobals->curtime;
+
+	m_bInSwing = InSwing();
+}
+#endif
 
 #endif
 
@@ -672,6 +834,12 @@ RenderGroup_t C_WeaponStunStick::GetRenderGroup( void )
 //-----------------------------------------------------------------------------
 // Purpose: Tells us we're always a translucent entity
 //-----------------------------------------------------------------------------
+#ifdef EZ
+bool CWeaponStunStick::InSwing( void )
+{
+	return m_bInSwing;
+}
+#else
 bool C_WeaponStunStick::InSwing( void )
 {
 	int activity = GetActivity();
@@ -689,6 +857,7 @@ bool C_WeaponStunStick::InSwing( void )
 
 	return false;
 }
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: Draw our special effects
@@ -841,6 +1010,10 @@ void C_WeaponStunStick::DrawFirstPersonEffects( void )
 		}
 	}
 }
+
+// NOTE (EZ1 port): m_flLastMuzzleFlashTime / m_pStunstickLight live behind
+// #ifdef EZ in the header below. The glow flash hook stays dormant until that
+// projected-texture surface ports cleanly onto this nillerusr tree.
 
 //-----------------------------------------------------------------------------
 // Purpose: Draw our special effects
