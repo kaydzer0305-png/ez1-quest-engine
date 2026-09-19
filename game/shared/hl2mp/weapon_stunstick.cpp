@@ -10,7 +10,6 @@
 #include "weapon_hl2mpbasebasebludgeon.h"
 #include "IEffects.h"
 #include "debugoverlay_shared.h"
-#include "in_buttons.h"
 
 #ifndef CLIENT_DLL
 	#include "npc_metropolice.h"
