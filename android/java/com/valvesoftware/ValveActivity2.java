@@ -12,6 +12,7 @@ import android.util.Log;
 import org.libsdl.app.SDLActivity;
 
 import com.ezquest.engine.ContentRoots;
+import com.ezquest.engine.DeveloperProfileLaunch;
 import com.ezquest.engine.EngineEnv;
 import com.ezquest.engine.GameProfile;
 import com.ezquest.engine.Diagnostics;
@@ -90,7 +91,12 @@ public class ValveActivity2 extends SDLActivity
     private void setupEngineEnvironment() {
         GameProfile profile;
         try {
-            profile = GameProfile.forContext(this);
+            Intent self = null;
+            try {
+                self = getIntent();
+            } catch (Throwable ignored) {
+            }
+            profile = DeveloperProfileLaunch.activeProfile(this, self);
         } catch (Exception e) {
             Log.w(TAG, "no game profile in manifest, defaulting to hl2", e);
             profile = GameProfile.HL2;

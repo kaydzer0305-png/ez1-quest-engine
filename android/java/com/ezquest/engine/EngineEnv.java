@@ -18,9 +18,13 @@ import java.util.Locale;
  *   <li>VALVE_GAME_PATH — user content root the engine mounts</li>
  *   <li>SOURCEVR_WRITE_GAME_PATH — writable per-profile dir (saves, config)</li>
  *   <li>SOURCEVR_SHARED_CONTENT_PATH — shared depot root (== content root until slice C)</li>
- *   <li>EXTRAS_VPK_PATH, VR_CONTENT_PATH — comma-joined overlay dirs (empty until the importer lands)</li>
+ *   <li>EXTRAS_VPK_PATH — comma-joined enabled {@code custom/} mod dirs
+ *       (see {@link ModManager}; empty == absent to the engine)</li>
+ *   <li>VR_CONTENT_PATH — VR overlay content (empty; reserved SourceVR parity slot)</li>
  *   <li>SOURCEVR_RUNTIME_GRAPH — native .so graph manifest path (empty until slice D)</li>
- *   <li>SOURCEVR_USER_LAUNCH_ARGS_PATH — optional per-profile extra-args file</li>
+ *   <li>SOURCEVR_USER_LAUNCH_ARGS_PATH — optional per-profile extra-args file,
+ *       published only when its contents pass {@link ProfileLaunchArguments}
+ *       validation (SourceVR parity; fail-closed)</li>
  *   <li>LANG — ICU locale for the engine (xx_YY, xx_419, ...)</li>
  * </ul>
  * Uses android.system.Os so this can run before any .so is loaded
@@ -57,17 +61,49 @@ public final class EngineEnv {
         setenv("SOURCEVR_WRITE_GAME_PATH", roots.writeGameDir.getAbsolutePath());
         setenv("SOURCEVR_SHARED_CONTENT_PATH", roots.contentRoot.getAbsolutePath());
 
-        // Overlay / graph slots: empty until the importer (slice C) and the
-        // native graph manifest (slice D) exist. Empty == absent to the engine.
-        setenv("EXTRAS_VPK_PATH", "");
+        // Enabled custom/ mods (SourceVR-compatible markers). Empty == absent.
+        String extras = "";
+        try {
+            extras = ModManager.extrasPaths(roots.gameDir);
+        } catch (Throwable t) {
+            Log.w(TAG, "mod scan failed for " + roots.gameDir, t);
+            extras = "";
+        }
+        setenv("EXTRAS_VPK_PATH", extras);
         setenv("VR_CONTENT_PATH", "");
         setenv("SOURCEVR_RUNTIME_GRAPH", "");
 
-        // Optional per-profile extra args file; unset when absent so a stale
-        // path from a previous install can never leak into this boot.
+        // Optional per-profile extra args file, validated SourceVR-style.
+        // Fail-closed: absent, unreadable, or invalid -> unset so a stale
+        // path or bad args from a previous install can never leak into boot.
         File argsFile = launchArgsFile(roots, profile);
+        String argsStatus = "(none)";
         if (argsFile != null) {
-            setenv("SOURCEVR_USER_LAUNCH_ARGS_PATH", argsFile.getAbsolutePath());
+            String text = readLaunchArgsText(argsFile);
+            if (text == null) {
+                Log.w(TAG, "launch-args unreadable, ignoring: "
+                        + argsFile.getAbsolutePath());
+                unsetenv("SOURCEVR_USER_LAUNCH_ARGS_PATH");
+                argsStatus = "(unreadable)";
+            } else {
+                ProfileLaunchArguments.Validation v =
+                        ProfileLaunchArguments.validate(text);
+                if (!v.isValid()) {
+                    Log.e(TAG, "launch-args invalid (" + v.error
+                            + (v.arg.isEmpty() ? "" : " arg=" + v.arg)
+                            + "), ignoring: " + argsFile.getAbsolutePath());
+                    unsetenv("SOURCEVR_USER_LAUNCH_ARGS_PATH");
+                    argsStatus = "(invalid:" + v.error + ")";
+                } else if (v.normalized.isEmpty()) {
+                    unsetenv("SOURCEVR_USER_LAUNCH_ARGS_PATH");
+                    argsStatus = "(empty)";
+                } else {
+                    setenv("SOURCEVR_USER_LAUNCH_ARGS_PATH",
+                            argsFile.getAbsolutePath());
+                    argsStatus = argsFile.getAbsolutePath()
+                            + " tokens=" + v.tokenCount;
+                }
+            }
         } else {
             unsetenv("SOURCEVR_USER_LAUNCH_ARGS_PATH");
         }
@@ -77,10 +113,18 @@ public final class EngineEnv {
             setenv("LANG", lang);
         }
 
+        int modCount;
+        try {
+            modCount = ModManager.enabledModDirs(roots.gameDir).size();
+        } catch (Throwable t) {
+            modCount = -1;
+        }
         return "profile=" + profile.id
                 + " game=" + roots.gameDir.getAbsolutePath()
                 + " writeGame=" + roots.writeGameDir.getAbsolutePath()
-                + " launchArgs=" + (argsFile != null ? argsFile.getAbsolutePath() : "(none)")
+                + " mods=" + modCount
+                + " extras=" + (extras.isEmpty() ? "(none)" : extras)
+                + " launchArgs=" + argsStatus
                 + " LANG=" + lang;
     }
 
@@ -89,6 +133,52 @@ public final class EngineEnv {
         File file = new File(new File(roots.filesRoot, LAUNCH_ARGS_DIR),
                 profile.id + ".txt");
         return file.isFile() ? file : null;
+    }
+
+    /**
+     * Read a launch-args file as UTF-8 for validation. Returns null on any
+     * I/O failure. Caps the read at {@link ProfileLaunchArguments#MAX_UTF8_BYTES}
+     * + 1 so oversized files are detected as TOO_LARGE rather than truncated.
+     */
+    static String readLaunchArgsText(File file) {
+        if (file == null) {
+            return null;
+        }
+        java.io.FileInputStream in = null;
+        try {
+            in = new java.io.FileInputStream(file);
+            java.io.ByteArrayOutputStream buf =
+                    new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[512];
+            int cap = ProfileLaunchArguments.MAX_UTF8_BYTES + 1;
+            int total = 0;
+            while (total <= cap) {
+                int n = in.read(chunk, 0,
+                        Math.min(chunk.length, cap - total + 1));
+                if (n <= 0) {
+                    break;
+                }
+                buf.write(chunk, 0, n);
+                total += n;
+            }
+            byte[] bytes = buf.toByteArray();
+            if (bytes.length > ProfileLaunchArguments.MAX_UTF8_BYTES + 1) {
+                bytes = java.util.Arrays.copyOf(bytes,
+                        ProfileLaunchArguments.MAX_UTF8_BYTES + 1);
+            }
+            return new String(bytes,
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Throwable t) {
+            Log.w(TAG, "could not read " + file.getAbsolutePath(), t);
+            return null;
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
     }
 
     public static void setenv(String name, String value) {

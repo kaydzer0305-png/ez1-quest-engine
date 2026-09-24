@@ -71,6 +71,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Developer profile override (SourceVR parity): adb-gated boot
+                 of a non-manifest profile, e.g. ez1 on an hl2-manifest build.
+                 See DeveloperProfileLaunch. -->
+            <intent-filter>
+                <action android:name="com.ezquest.engine.action.RUN_DEV_PROFILE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
         </activity>
         <!-- Flat engine: explicit-only entry, started by LauncherActivity
              once the app holds focus (see LauncherActivity). -->

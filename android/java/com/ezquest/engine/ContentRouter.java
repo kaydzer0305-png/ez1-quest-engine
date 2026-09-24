@@ -19,7 +19,12 @@ public final class ContentRouter {
     public static boolean routeIfNeeded(Activity activity) {
         GameProfile profile;
         try {
-            profile = GameProfile.forContext(activity);
+            Intent launchIntent = null;
+            try {
+                launchIntent = activity.getIntent();
+            } catch (Throwable ignored) {
+            }
+            profile = DeveloperProfileLaunch.activeProfile(activity, launchIntent);
         } catch (Exception e) {
             Log.w(TAG, "profile unreadable here; engine gate will report it", e);
             return false;
@@ -41,7 +46,13 @@ public final class ContentRouter {
                     + " content; routing to importer (" + e + ")");
         }
         try {
-            activity.startActivity(ImportActivity.intentFor(activity));
+            Intent importer = ImportActivity.intentFor(activity);
+            try {
+                DeveloperProfileLaunch.forwardOverride(
+                        activity.getIntent(), importer);
+            } catch (Throwable ignored) {
+            }
+            activity.startActivity(importer);
         } catch (Exception e) {
             Log.e(TAG, "could not open importer", e);
         }

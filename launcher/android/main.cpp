@@ -49,26 +49,81 @@ DLL_EXPORT void Java_com_valvesoftware_ValveActivity2_setArgs(JNIEnv *env, jclas
 
 void SetLauncherArgs()
 {
-#define A(a,b) LauncherArgv[iLastArgs++] = (char*)a; \
-	LauncherArgv[iLastArgs++] = (char*)b
-#define D(a) LauncherArgv[iLastArgs++] = (char*)a
+#define A(a,b) do { if ( iLastArgs + 2 < 512 ) { LauncherArgv[iLastArgs++] = (char*)a; \
+	LauncherArgv[iLastArgs++] = (char*)b; } } while (0)
+#define D(a) do { if ( iLastArgs + 1 < 512 ) { LauncherArgv[iLastArgs++] = (char*)a; } } while (0)
 
 	static char binPath[2048];
+	static char gamePath[2048];
+	static char launchArgsBuf[2048];
 	const char *bindir = getenv("NATIVE_LIB_DIR");
 	if ( !bindir || !bindir[0] )
 		bindir = getenv("APP_DATA_PATH");
-	snprintf(binPath, sizeof binPath, "%s/hl2_linux", bindir );
+	snprintf(binPath, sizeof binPath, "%s/hl2_linux", bindir ? bindir : "" );
 	D(binPath);
 
 	D("-nouserclip");
+
+	// Flat path feeds "-game <abs>" via setArgs(); the VR NativeActivity
+	// path never calls setArgs, so java_args is empty there. Fall back to
+	// SOURCEVR_GAME + VALVE_GAME_PATH (SourceVR parity) so VR honors the
+	// manifest / dev-override profile instead of always booting hl2.
+	bool hasGame = ( strstr( java_args, "-game" ) != NULL );
+	if ( !hasGame )
+	{
+		const char *game = getenv( "SOURCEVR_GAME" );
+		if ( !game || !game[0] )
+			game = "hl2";
+		const char *base = getenv( "VALVE_GAME_PATH" );
+		if ( base && base[0] )
+			snprintf( gamePath, sizeof gamePath, "%s/%s", base, game );
+		else
+			snprintf( gamePath, sizeof gamePath, "%s", game );
+		A( "-game", gamePath );
+		Msg( "SetLauncherArgs: injected -game %s (VR fallback, SOURCEVR_GAME=%s)\n", gamePath, game );
+	}
 
 	char *pch;
 
 	pch = strtok (java_args," ");
 	while (pch != NULL)
 	{
+		if ( iLastArgs + 1 >= 512 )
+			break;
 		LauncherArgv[iLastArgs++] = pch;
 		pch = strtok (NULL, " ");
+	}
+
+	// Validated per-profile extra args (Java side enforces SourceVR rules:
+	// 1024B / 128 tokens, no managed flags, +vr_* allowlist). Append here so
+	// both flat and VR paths honor launch-args/<profile>.txt.
+	const char *argsPath = getenv( "SOURCEVR_USER_LAUNCH_ARGS_PATH" );
+	if ( argsPath && argsPath[0] )
+	{
+		FILE *f = fopen( argsPath, "rb" );
+		if ( f )
+		{
+			size_t n = fread( launchArgsBuf, 1, sizeof launchArgsBuf - 1, f );
+			fclose( f );
+			launchArgsBuf[n] = '\0';
+			// Keep it simple and safe: whitespace-split, cap argv.
+			// The file was validated Java-side; this is a second gate.
+			char *tok = strtok( launchArgsBuf, " \t\r\n" );
+			int appended = 0;
+			while ( tok && iLastArgs + 1 < 510 )
+			{
+				if ( tok[0] == '"' || tok[0] == '@' )
+					break; // fail-closed on unexpected content
+				LauncherArgv[iLastArgs++] = tok;
+				appended++;
+				tok = strtok( NULL, " \t\r\n" );
+			}
+			Msg( "SetLauncherArgs: appended %d launch-args tokens from %s\n", appended, argsPath );
+		}
+		else
+		{
+			Msg( "SetLauncherArgs: launch-args unreadable: %s\n", argsPath );
+		}
 	}
 
 	D("-fullscreen");

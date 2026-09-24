@@ -50,7 +50,12 @@ public class EngineActivity extends NativeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         GameProfile profile;
         try {
-            profile = GameProfile.forContext(this);
+            Intent intent = null;
+            try {
+                intent = getIntent();
+            } catch (Throwable ignored) {
+            }
+            profile = DeveloperProfileLaunch.activeProfile(this, intent);
         } catch (Exception e) {
             Log.e(TAG, "no usable game profile", e);
             RecoveryActivity.launch(this, "profile",
@@ -151,7 +156,12 @@ public class EngineActivity extends NativeActivity {
         mHandler.removeCallbacks(mXrPollRunnable);
         Log.w(TAG, "flat fallback: " + reason);
         try {
-            startActivity(new Intent(this, ValveActivity2.class));
+            Intent flat = new Intent(this, ValveActivity2.class);
+            try {
+                DeveloperProfileLaunch.forwardOverride(getIntent(), flat);
+            } catch (Throwable ignored) {
+            }
+            startActivity(flat);
         } catch (Exception e) {
             Log.e(TAG, "flat fallback failed", e);
             RecoveryActivity.launch(this, "xr",
