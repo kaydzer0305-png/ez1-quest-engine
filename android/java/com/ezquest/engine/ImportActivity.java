@@ -48,7 +48,12 @@ public class ImportActivity extends Activity {
         super.onCreate(savedInstanceState);
         GameProfile profile;
         try {
-            profile = GameProfile.forContext(this);
+            Intent self = null;
+            try {
+                self = getIntent();
+            } catch (Throwable ignored) {
+            }
+            profile = DeveloperProfileLaunch.activeProfile(this, self);
         } catch (Exception e) {
             Log.w(TAG, "no profile; defaulting to hl2", e);
             profile = GameProfile.HL2;

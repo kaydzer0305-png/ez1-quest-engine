@@ -130,6 +130,13 @@ public class LauncherActivity extends Activity {
             } else {
                 engine = new Intent(this, ValveActivity2.class);
             }
+            // Forward an authorized dev-profile override (e.g. boot ez1 on an
+            // hl2-manifest build) so the engine resolves the same profile the
+            // launcher gated on.
+            try {
+                DeveloperProfileLaunch.forwardOverride(getIntent(), engine);
+            } catch (Throwable ignored) {
+            }
             startActivity(engine);
         } catch (Exception e) {
             Log.e(TAG, "launcher: could not start engine", e);
