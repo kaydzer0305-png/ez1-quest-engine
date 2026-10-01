@@ -1,0 +1,172 @@
+name: build-ez2-arm64
+
+# Builds the EZ2Launcher APK: Gradle assembles the launcher, the engine's
+# ARM64 .so files and its native .load graph are injected into it, and the
+# result is a single sideloadable APK.
+#
+# This does NOT replace build-android-arm64.yml. That pipeline is the proven
+# EZ1 path and stays runnable; this one exists because EZ2Launcher is a Gradle
+# project and the EZ1 pipeline compiles Java with javac/d8/aapt2 by hand.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_games:
+        description: 'waf --build-games value. ez2 requires the M1 game-code port; ez1 is the proven default.'
+        required: false
+        default: 'ez1'
+      launcher_repo:
+        description: 'Git repo holding the EZ2Launcher Gradle project (empty = not yet published)'
+        required: false
+        default: ''
+      launcher_ref:
+        description: 'Branch/tag/SHA of launcher_repo to build'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  ez2-arm64:
+    runs-on: ubuntu-22.04
+    env:
+      ENGINE_DIR: engine
+      LAUNCHER_DIR: launcher
+    steps:
+      - name: Check out engine
+        uses: actions/checkout@v4
+        with:
+          path: engine
+          submodules: recursive
+
+      # EZ2Launcher is not a git repository yet, so there is nothing for CI to
+      # clone. Publish it (or point this at a fork) and set `launcher_repo`; the
+      # step self-disables and the job fails with an actionable message rather
+      # than building an engine-only APK that would silently miss the launcher.
+      - name: Check out EZ2Launcher
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.launcher_repo }}
+          ref: ${{ inputs.launcher_ref }}
+          path: launcher
+        if: ${{ inputs.launcher_repo != '' }}
+
+      - name: Require a launcher checkout
+        if: ${{ inputs.launcher_repo == '' }}
+        run: |
+          echo "::error::Set the 'launcher_repo' input to a git repository containing the EZ2Launcher Gradle project." >&2
+          echo "EZ2Launcher is not version-controlled yet, so this workflow has nothing to build." >&2
+          exit 1
+
+      - name: Setup NDK r20b
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
+          unzip -q android-ndk-r20b-linux-x86_64.zip
+          echo "ANDROID_NDK_HOME=$GITHUB_WORKSPACE/android-ndk-r20b" >> "$GITHUB_ENV"
+
+      - name: Fetch OpenXR loader (Khronos AAR)
+        working-directory: engine
+        env:
+          OPENXR_AAR_VERSION: "1.0.34"
+        run: |
+          set -e
+          AAR="openxr_loader_for_android-${OPENXR_AAR_VERSION}.aar"
+          wget -q "https://repo1.maven.org/maven2/org/khronos/openxr/openxr_loader_for_android/${OPENXR_AAR_VERSION}/${AAR}"
+          unzip -q "${AAR}" -d openxr-aar
+          INC=$(dirname "$(find openxr-aar -name openxr.h | head -1)")
+          SO="openxr-aar/prefab/modules/openxr_loader/libs/android.arm64-v8a/libopenxr_loader.so"
+          test -n "$INC" || { echo 'openxr.h not found in AAR'; exit 1; }
+          test -f "$SO" || { echo "arm64-v8a libopenxr_loader.so not found"; exit 1; }
+          mkdir -p external/openxr/include/openxr external/openxr/lib/aarch64
+          cp "$INC"/*.h external/openxr/include/openxr/
+          cp "$SO" external/openxr/lib/aarch64/
+          python3 -c 'import struct; d=open("external/openxr/lib/aarch64/libopenxr_loader.so","rb").read(64); assert d[:4]==b"\x7fELF"; m=struct.unpack_from("<H",d,18)[0]; assert m==183, m'
+
+      - name: Configure engine
+        working-directory: engine
+        run: |
+          set -o pipefail
+          ./waf configure -T release --android=aarch64,4.9,24 --togles --disable-warns \
+            --build-games="${{ inputs.build_games }}" 2>&1 | tee configure.log
+
+      - name: Build engine
+        working-directory: engine
+        run: |
+          set -o pipefail
+          ./waf build 2>&1 | tee build.log
+
+      - name: Build hidapi stub
+        working-directory: engine
+        run: |
+          CC="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          mkdir -p apk/lib/arm64-v8a
+          "$CC" -shared -fPIC -O1 android/native/hidapi_stub.c -o apk/lib/arm64-v8a/libhidapi.so
+
+      # EZ2EngineActivity.hasNativeGraph() refuses to start unless
+      # assets/ez2/native contains a *.load manifest, and the manifest must name
+      # the same libraries that are being shipped. So the graph and the .so set
+      # are collected together and verified against each other here rather than
+      # discovered as a runtime refusal on the headset.
+      - name: Collect engine libraries and native load graph
+        working-directory: engine
+        run: |
+          set -eux
+          STAGE="$GITHUB_WORKSPACE/stage"
+          mkdir -p "$STAGE/libs" "$STAGE/load"
+          find build -name '*.so' -print0 | xargs -0 -r -I{} cp {} "$STAGE/libs/"
+          cp lib/android/aarch64/libSDL2.so "$STAGE/libs/"
+          cp external/openxr/lib/aarch64/libopenxr_loader.so "$STAGE/libs/"
+          LIBCXX=$(find "$ANDROID_NDK_HOME" \( -path '*arm64*' -o -path '*aarch64*' \) -name 'libc++_shared.so' | head -1)
+          if [ -z "$LIBCXX" ]; then LIBCXX=$(find "$ANDROID_NDK_HOME" -name 'libc++_shared.so' | head -1); fi
+          test -n "$LIBCXX" || { echo 'libc++_shared.so not found in NDK'; exit 1; }
+          cp "$LIBCXX" "$STAGE/libs/"
+          find build -name '*.load' -print0 | xargs -0 -r -I{} cp {} "$STAGE/load/"
+          echo "libs: $(ls "$STAGE/libs" | wc -l)  load manifests: $(ls "$STAGE/load" | wc -l)"
+          test -f "$STAGE/libs/liblauncher.so" || { echo 'liblauncher.so missing — android.app.lib_name would fail at load'; exit 1; }
+          ls -la "$STAGE/libs"
+
+      - name: Inject engine into the launcher Gradle project
+        run: |
+          set -eux
+          JNI="$GITHUB_WORKSPACE/$LAUNCHER_DIR/app/src/main/jniLibs/arm64-v8a"
+          ASSETS="$GITHUB_WORKSPACE/$LAUNCHER_DIR/app/src/main/assets/ez2/native"
+          mkdir -p "$JNI" "$ASSETS"
+          cp $GITHUB_WORKSPACE/stage/libs/*.so "$JNI/"
+          cp $GITHUB_WORKSPACE/stage/load/*.load "$ASSETS/"
+          ls -la "$JNI" "$ASSETS"
+
+      - name: Assemble launcher APK
+        working-directory: launcher
+        run: |
+          set -eux
+          # AGP resolves the SDK from local.properties, then ANDROID_HOME, then
+          # ANDROID_SDK_ROOT; the runner sets the last one.
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:assembleDebug
+          ls -la app/build/outputs/apk/debug/
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: EZ2VR-apk
+          path: launcher/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload logs on failure
+        if: failure()
+        run: |
+          mkdir -p logs
+          find . -maxdepth 3 -name '*.log' -not -path './.git/*' -exec cp --parents {} logs/ \; 2>/dev/null || true
+          cp engine/configure.log engine/build.log logs/ 2>/dev/null || true
+          tar czf logs.tar.gz logs 2>/dev/null || true
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: logs.tar.gz
+          if-no-files-found: ignore

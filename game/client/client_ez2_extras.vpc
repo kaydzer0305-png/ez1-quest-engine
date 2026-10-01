@@ -1,0 +1,49 @@
+//-----------------------------------------------------------------------------
+// Entropy: Zero 2 profile on top of client_hl2.vpc. M2: wiring, the ez2vr client
+// convars, and the player/weapon half of the EZ2 client roster.
+//
+// Source: entropy-zero ez2/mapbase branch.
+//-----------------------------------------------------------------------------
+$Macro SRCDIR		"..\.."
+
+// See server_ez2_extras.vpc and server_hl2.vpc:17 for the include convention.
+$Configuration
+{
+	$AdditionalIncludeDirectories	"$BASE;$SRCDIR\game\shared\ez2vr;$SRCDIR\game\shared\ez2;.\ez2vr"
+}
+
+$Project "Client (Entropy Zero 2)"
+{
+	// Presentation-policy ez2vr_* registrations. These never affect simulation,
+	// so they live only here and never in the server DLL.
+	$Folder	"ez2vr"
+	{
+		$File	"ez2vr\ez2vr_cvars_client.cpp"
+	}
+
+	// M2: the EZ2 player and its weapons, mirroring the server roster.
+	$Folder	"ez2"
+	{
+		$File	"ez2\c_ez2_player.cpp"
+		$File	"ez2\c_weapon_oicw.cpp"
+		$File	"ez2\c_weapon_pulse_pistol.cpp"
+	}
+
+	// M2: the sniper client — the APC's vehicle_weapon_sniperrifle pairs with
+	// the drivable APC that server_ez1_extras.vpc already ships.
+	$Folder	"Human_Error"
+	{
+		$File	"Human_Error\c_weapon_sniperrifle.cpp"
+	}
+
+	// M2: backfills UTIL_GetWeaponAttachment, which client_hl2.vpc already
+	// expects from the never-imported c_weapon_stunstick.cpp. See the file's
+	// own header comment before adding anything else here.
+	$Folder	"hl2"
+	{
+		$File	"hl2\weapon_attachment_util.cpp"
+	}
+
+	// M3: client\ez2 roster remainder (assassin, husks, crabsynth, wilson,
+	// slam/gloop proxies, healthvial).
+}
