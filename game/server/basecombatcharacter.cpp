@@ -2073,6 +2073,13 @@ void CBaseCombatCharacter::SetLightingOriginRelative( CBaseEntity *pLightingOrig
 //-----------------------------------------------------------------------------
 void CBaseCombatCharacter::Weapon_Equip( CBaseCombatWeapon *pWeapon )
 {
+#ifdef EZ2
+	// Mapbase splits the inventory-add out into Weapon_HandleEquip so that a
+	// derived character (EZ2's player) can hook it. The hl2/ez1 profiles keep
+	// the original inline loop below so their behaviour and class layout are
+	// untouched.
+	Weapon_HandleEquip( pWeapon );
+#else
 	// Add the weapon to my weapon inventory
 	for (int i=0;i<MAX_WEAPONS;i++) 
 	{
@@ -2082,6 +2089,7 @@ void CBaseCombatCharacter::Weapon_Equip( CBaseCombatWeapon *pWeapon )
 			break;
 		}
 	}
+#endif
 
 	// Weapon is now on my team
 	pWeapon->ChangeTeam( GetTeamNumber() );
@@ -2168,6 +2176,25 @@ void CBaseCombatCharacter::Weapon_Equip( CBaseCombatWeapon *pWeapon )
 	// Pass the lighting origin over to the weapon if we have one
 	pWeapon->SetLightingOriginRelative( GetLightingOriginRelative() );
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose:	Add new weapon to the character's inventory
+// Input  : New weapon
+//-----------------------------------------------------------------------------
+void CBaseCombatCharacter::Weapon_HandleEquip( CBaseCombatWeapon *pWeapon )
+{
+	// Add the weapon to my weapon inventory
+	for (int i=0;i<MAX_WEAPONS;i++) 
+	{
+		if (!m_hMyWeapons[i]) 
+		{
+			m_hMyWeapons.Set( i, pWeapon );
+			break;
+		}
+	}
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose:	Leaves weapon, giving only ammo to the character

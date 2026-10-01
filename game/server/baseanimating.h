@@ -303,6 +303,18 @@ public:
 	bool IsDissolving() { return ( (GetFlags() & FL_DISSOLVING) != 0 ); }
 	void TransferDissolveFrom( CBaseAnimating *pAnim );
 
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1). CBaseEntity's
+	// IsDisplacementImpossible() defaults to true, so without this override
+	// NOTHING would be displaceable and the EZ2 displacer pistol would be
+	// inert. m_bDisplacementImpossible is a keyfield (see baseanimating.cpp),
+	// so maps can opt individual entities back out.
+	virtual bool	IsDisplacementImpossible() { return m_bDisplacementImpossible; }
+	virtual void	SetDisplacementImpossible( bool displacementImpossible ) { m_bDisplacementImpossible = displacementImpossible; }
+
+	void	InputSetDisplacementImpossible( inputdata_t &inputdata ) { SetDisplacementImpossible( inputdata.value.Bool() ); }
+#endif
+
 	// animation needs
 	float				m_flGroundSpeed;	// computed linear movement rate for current sequence
 	float				m_flLastEventCheck;	// cycle index of when events were last checked
@@ -377,6 +389,9 @@ public:
 	QAngle	GetStepAngles( void ) const;
 
 private:
+#ifdef EZ2
+	bool				m_bDisplacementImpossible;
+#endif
 	bool				m_bSequenceFinished;// flag set when StudioAdvanceFrame moves across a frame boundry
 	bool				m_bSequenceLoops;	// true if the sequence loops
 	bool				m_bResetSequenceInfoOnLoad; // true if a ResetSequenceInfo was queued up during dynamic load

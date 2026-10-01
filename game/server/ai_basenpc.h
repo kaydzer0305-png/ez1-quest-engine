@@ -1094,6 +1094,15 @@ public:
 	//
 	//-----------------------------------------------------
 	virtual bool IsCommandable()										{ return false; }
+#ifdef EZ2
+	// AI backplane port. A "silent commandable" follows move orders but is not
+	// counted in the squad's tallies -- the EZ2 analogue of an insignificant
+	// commandable like a manhack. Do NOT confuse this with the pre-existing
+	// IsSilentSquadMember() below, which means "in the squad for enemy info
+	// only" (the enemy-finder role). Nothing in the M2 roster derives from
+	// mapbase's CAI_SilentSquadMember template, so false here matches desktop.
+	virtual bool IsSilentCommandable()									{ return false; }
+#endif
 	virtual bool IsPlayerAlly( CBasePlayer *pPlayer = NULL );
 	virtual bool IsMedic()												{ return false; }
 	virtual bool IsCommandMoving()										{ return false; }
@@ -1210,6 +1219,20 @@ public:
 	virtual void		PlayerHasIlluminatedNPC( CBasePlayer *pPlayer, float flDot );
 
 	virtual void		ModifyOrAppendCriteria( AI_CriteriaSet& set );
+#ifdef EZ2
+	// AI backplane port. EZ2's response system asks each NPC to contribute its
+	// own criteria (its EZ variant, mostly) when the player speaks.
+	//
+	// Upstream mapbase implements this on the base class by reading a shared
+	// CAI_BaseNPC::m_tEzVariant keyfield. This tree deliberately does NOT carry
+	// that member: it predates the port and each shipped EZ NPC keeps its own
+	// m_tEzVariant (see ez2/npc_basepredator.h, which also owns the keyfield).
+	// Adding the base member now would shadow those per-NPC ones, so the base
+	// stays an empty virtual and each NPC appends its own variant instead.
+	// Flip to the upstream shape when the whole roster lands and can be
+	// migrated onto one shared keyfield.
+	virtual void		ModifyOrAppendCriteriaForPlayer( CBasePlayer *pPlayer, AI_CriteriaSet& set ) {}
+#endif
 
 protected:
 	float		SoundWaitTime() const { return m_flSoundWaitTime; }
@@ -2127,6 +2150,12 @@ public:
 
 #ifdef EZ
 public:
+	// mapbase declares KillSprites() public (see the EZ2/mapbase ai_basenpc.h);
+	// the EZ2 displacer pistol calls it on a displaced NPC. Moved up out of the
+	// protected block below to match.
+	virtual void		KillSprites( float flDelay );
+	virtual void		StartEye( void );
+
 	struct EyeGlow_t
 	{
 		EyeGlow_t()
@@ -2146,8 +2175,6 @@ protected:
 	CSprite		*m_pEyeGlow;
 	bool		m_bNoGlow;
 
-	virtual void		StartEye( void );
-	virtual void		KillSprites( float flDelay );
 	virtual CSprite		*GetGlowSpritePtr( int i );
 	virtual void		SetGlowSpritePtr( int i, CSprite *sprite );
 	virtual EyeGlow_t	*GetEyeGlowData( int i ) { return NULL; }

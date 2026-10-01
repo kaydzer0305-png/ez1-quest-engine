@@ -14,6 +14,24 @@
 
 LINK_ENTITY_TO_CLASS( basehlcombatweapon, CBaseHLCombatWeapon );
 
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Spawn the prop_dynamic_override that stands in for the left hand.
+//-----------------------------------------------------------------------------
+// Stub for now. CanDualWield() is false for every weapon, so the real mapbase
+// implementation -- which spawns the entity, picks szWorldModelDual (or the
+// world model with "_left" appended), replays the first-draw animation and
+// attaches the prop to the owner -- could never get past its own guard. The
+// declared-but-dormant call sites in ez2_player.cpp therefore see NULL, which is
+// what they already treat as "no left hand gun". Replace this with the real
+// implementation when the dual-wield system is ported; see the EZ2 block in
+// basehlcombatweapon_shared.h.
+CBaseAnimating *CBaseHLCombatWeapon::CreateLeftHandGun()
+{
+	return NULL;
+}
+#endif
+
 IMPLEMENT_NETWORKCLASS_ALIASED( BaseHLCombatWeapon , DT_BaseHLCombatWeapon )
 
 BEGIN_NETWORK_TABLE( CBaseHLCombatWeapon , DT_BaseHLCombatWeapon )

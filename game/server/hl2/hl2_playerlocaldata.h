@@ -44,6 +44,15 @@ public:
 	CNetworkVar( float, m_flFlashBattery );
 	CNetworkVar( Vector, m_vecLocatorOrigin );
 #endif
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1). Must stay in lockstep with
+	// the CNetworkVar layout in c_hl2_playerlocaldata.h: both are predicted, so
+	// a field present on one side only desyncs the client channel. Guarded by
+	// EZ2, so the hl2/ez1 DT_HL2Local layout is byte-identical.
+	CNetworkVar( int,	m_iSatchelCount );
+	CNetworkVar( int,	m_iTripmineCount );
+	CNetworkVar( int,	m_iDetonatableCount );	// Misc. explosives that aren't satchels or tripmines, but can be tracked and detonated
+#endif
 
 	// Ladder related data
 	CNetworkVar( EHANDLE, m_hLadder );

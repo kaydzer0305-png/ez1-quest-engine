@@ -138,7 +138,34 @@
 
 //-----------------------------------------------------------------------------
 
+#ifdef EZ2
+// Minimal mapbase backplane (TRANSPLANT-A §4.1): EZ2 squad-command and
+// detonation speech concepts, plus the "Remarkable!" concept that
+// ez2_player.cpp speaks when it notices a CInfoRemarkable. The concept strings
+// themselves only need to exist; the matching rules arrive with the EZ2
+// speech/AI work, and a concept with no rule simply stays silent.
+// TLK_BEG sits with TLK_DANGER above, where the old tree keeps its concepts.
+#define TLK_COMMAND_SEND	"TLK_COMMAND_SEND" // 1upD - issuing order to send squad
+#define TLK_COMMAND_RECALL	"TLK_COMMAND_RECALL" // 1upD - issuing order to recall squad
+#define TLK_COMMAND_ADD		"TLK_COMMAND_ADD" // 1upD - issuing order to join squad
+#define TLK_COMMAND_REMOVE	"TLK_COMMAND_REMOVE" // 1upD - issuing order to leave squad
+#define TLK_DETONATE		"TLK_DETONATE" // 1upD - detonating satchel charges
+#define TLK_THROWGRENADE	"TLK_THROWGRENADE"
+#define TLK_USE_SCARE		"TLK_USE_SCARE"
+
+// Remarkable!
+#define TLK_REMARK "TLK_REMARK"
+#endif
+
 #define TALKER_STARE_DIST	128				// anyone closer than this and looking at me is probably staring at me.
+
+#ifdef EZ2
+// Minimal mapbase backplane (TRANSPLANT-A §4.1): ez2_player.cpp uses TLK_BEG
+// when Bad Cop encounters an unarmed, threatened citizen. The matching
+// citizen-side "beg" speech concept arrives with the surrender behaviour in M3;
+// until then the call finds no matching rule and stays silent.
+#define TLK_BEG				"TLK_BEG"	// Citizen are unarmed and threatened
+#endif
 
 #define TALKER_DEFER_IDLE_SPEAK_MIN		10
 #define TALKER_DEFER_IDLE_SPEAK_MAX		20
@@ -373,6 +400,10 @@ public:
 	bool		ShouldSpeakRandom( AIConcept_t concept, int iChance );
 	bool		IsAllowedToSpeak( AIConcept_t concept, bool bRespondingToPlayer = false );
 	virtual bool SpeakIfAllowed( AIConcept_t concept, const char *modifiers = NULL, bool bRespondingToPlayer = false, char *pszOutResponseChosen = NULL, size_t bufsize = 0 );
+#ifdef EZ2
+	// AI backplane port (mapbase) -- same, with a pre-built criteria set.
+	virtual bool SpeakIfAllowed( AIConcept_t concept, AI_CriteriaSet& modifiers, bool bRespondingToPlayer = false, char *pszOutResponseChosen = NULL, size_t bufsize = 0 );
+#endif
 	void		ModifyOrAppendCriteria( AI_CriteriaSet& set );
 
 	//---------------------------------

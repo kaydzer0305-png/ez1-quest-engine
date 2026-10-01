@@ -15,6 +15,40 @@
 
 extern ConVar hopwire_trap;
 
+#ifdef EZ2
+// Minimal mapbase backplane (TRANSPLANT-A §4.1). The EZ2 displacer pistol
+// derives from CDisplacerSink and builds a DisplacementInfo_t to hand to the
+// interaction system; upstream declares both here next to CGravityVortexController,
+// which itself derives from CDisplacerSink. The rest of mapbase's hopwire
+// rewrite is M3+ work and is deliberately not ported.
+class CDisplacerSink
+{
+public:
+	CDisplacerSink() { }
+
+	virtual void SpawnEffects( CBaseEntity *pEntity )	{};
+};
+
+// Displacement info for interactions
+struct DisplacementInfo_t
+{
+	DisplacementInfo_t( CBaseEntity *displacer, CDisplacerSink *sink, const Vector *targetpos, const QAngle *targetang, CBaseEntity * owner = NULL )
+	{
+		pDisplacer = displacer;
+		pSink = sink;
+		vecTargetPos = targetpos;
+		vecTargetAng = targetang;
+		pOwner = owner;
+	}
+
+	CBaseEntity *pDisplacer;
+	CDisplacerSink *pSink;
+	const Vector *vecTargetPos;
+	const QAngle *vecTargetAng;
+	CBaseEntity *pOwner;
+};
+#endif
+
 class CGravityVortexController;
 
 class CGrenadeHopwire : public CBaseGrenade

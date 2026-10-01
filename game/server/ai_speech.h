@@ -157,10 +157,29 @@ public:
 	// --------------------------------
 	
 	bool Speak( AIConcept_t concept, const char *modifiers = NULL, char *pszOutResponseChosen = NULL, size_t bufsize = 0, IRecipientFilter *filter = NULL );
+#ifdef EZ2
+	// AI backplane port (mapbase). Same as the overload above but taking a
+	// pre-built AI_CriteriaSet instead of a "name,value,weight" modifier string.
+	// EZ2 builds its criteria programmatically (see CEZ2_Player::SpeakIfAllowed),
+	// so the string form cannot express what it needs.
+	bool Speak( AIConcept_t concept, const AI_CriteriaSet& modifiers, char *pszOutResponseChosen = NULL, size_t bufsize = 0, IRecipientFilter *filter = NULL );
+#endif
 
 	// These two methods allow looking up a response and dispatching it to be two different steps
 	AI_Response *SpeakFindResponse( AIConcept_t concept, const char *modifiers = NULL );
-	bool SpeakDispatchResponse( AIConcept_t concept, AI_Response *response, IRecipientFilter *filter = NULL );
+#ifdef EZ2
+	// AI backplane port (mapbase) -- the criteria-set form of SpeakFindResponse.
+	AI_Response *SpeakFindResponse( AIConcept_t concept, const AI_CriteriaSet& modifiers );
+#endif
+	// AI backplane port (mapbase): the optional trailing `modifiers` backs the
+	// "$context" response-substitution feature, where a response whose text is
+	// "$name" is replaced by that context (or modifier) value. It is defaulted so
+	// every pre-existing three-argument call site is unaffected.
+	bool SpeakDispatchResponse( AIConcept_t concept, AI_Response *response, IRecipientFilter *filter = NULL
+#ifdef EZ2
+		, const AI_CriteriaSet *modifiers = NULL
+#endif
+		);
 	float GetResponseDuration( AI_Response *response );
 
 	virtual int SpeakRawSentence( const char *pszSentence, float delay, float volume = VOL_NORM, soundlevel_t soundlevel = SNDLVL_TALKING, CBaseEntity *pListener = NULL );
@@ -174,6 +193,12 @@ public:
 	bool CanSpeak();
 	bool CanSpeakAfterMyself();
 	float GetTimeSpeechComplete() const 	{ return m_flStopTalkTime; }
+#ifdef EZ2
+	// AI backplane port: same value as GetTimeSpeechComplete() but without the
+	// delay before other people may speak. EZ2's response system needs the
+	// undelayed number to decide whether a concept is still "worth" speaking.
+	float GetRealTimeSpeechComplete() const	{ return m_flStopTalkTimeWithoutDelay; }
+#endif
 	void  BlockSpeechUntil( float time );
 
 	// --------------------------------
@@ -183,6 +208,13 @@ public:
 	float GetTimeSpokeConcept( AIConcept_t concept ); // returns -1 if never
 	void SetSpokeConcept( AIConcept_t concept, AI_Response *response, bool bCallback = true );
 	void ClearSpokeConcept( AIConcept_t concept );
+#ifdef EZ2
+	// AI backplane port: the most recently spoken concept, optionally skipping
+	// one. EZ2's speech system uses it to avoid repeating itself. Every input it
+	// needs (m_ConceptHistories, ConceptHistory_t::timeSpoken) already exists on
+	// this class.
+	AIConcept_t GetLastSpokeConcept( AIConcept_t excludeConcept = NULL );
+#endif
 	
 	// --------------------------------
 	
@@ -281,9 +313,18 @@ public:
 	virtual void	NoteSpeaking( float duration, float delay );
 
 	virtual bool 	Speak( AIConcept_t concept, const char *modifiers = NULL, char *pszOutResponseChosen = NULL, size_t bufsize = 0, IRecipientFilter *filter = NULL );
+#ifdef EZ2
+	// AI backplane port (mapbase) -- see CAI_Expresser::Speak's criteria-set
+	// overload. Forwarded to the expresser.
+	virtual bool 	Speak( AIConcept_t concept, const AI_CriteriaSet& modifiers, char *pszOutResponseChosen = NULL, size_t bufsize = 0, IRecipientFilter *filter = NULL );
+#endif
 
 	// These two methods allow looking up a response and dispatching it to be two different steps
 	AI_Response *	SpeakFindResponse( AIConcept_t concept, const char *modifiers = NULL );
+#ifdef EZ2
+	// AI backplane port (mapbase) -- criteria-set form; see CAI_ExpresserHost::Speak.
+	AI_Response *	SpeakFindResponse( AIConcept_t concept, const AI_CriteriaSet& modifiers );
+#endif
 	bool 			SpeakDispatchResponse( AIConcept_t concept, AI_Response *response );
 	virtual void	PostSpeakDispatchResponse( AIConcept_t concept, AI_Response *response ) { return; }
 	float 			GetResponseDuration( AI_Response *response );
@@ -323,6 +364,16 @@ inline bool CAI_ExpresserHost<BASE_NPC>::Speak( AIConcept_t concept, const char 
 	AssertOnce( this->GetExpresser()->GetOuter() == this );
 	return this->GetExpresser()->Speak( concept, modifiers, pszOutResponseChosen, bufsize, filter ); 
 }
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+template <class BASE_NPC>
+inline bool CAI_ExpresserHost<BASE_NPC>::Speak( AIConcept_t concept, const AI_CriteriaSet& modifiers, char *pszOutResponseChosen /*=NULL*/, size_t bufsize /* = 0 */, IRecipientFilter *filter /* = NULL */ )
+{
+	AssertOnce( this->GetExpresser()->GetOuter() == this );
+	return this->GetExpresser()->Speak( concept, modifiers, pszOutResponseChosen, bufsize, filter );
+}
+#endif
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -364,6 +415,15 @@ inline AI_Response *CAI_ExpresserHost<BASE_NPC>::SpeakFindResponse( AIConcept_t 
 {
 	return this->GetExpresser()->SpeakFindResponse( concept, modifiers );
 }
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+template <class BASE_NPC>
+inline AI_Response *CAI_ExpresserHost<BASE_NPC>::SpeakFindResponse( AIConcept_t concept, const AI_CriteriaSet& modifiers )
+{
+	return this->GetExpresser()->SpeakFindResponse( concept, modifiers );
+}
+#endif
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------

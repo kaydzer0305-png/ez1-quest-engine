@@ -45,6 +45,14 @@ public:
 	float	m_flFlashBattery;
 	Vector	m_vecLocatorOrigin;
 #endif
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1): c_ez2_player.cpp's
+	// cl_slam_glow path diffs these predicted counts against its own handle
+	// lists. Guarded by EZ2, so hl2/ez1 client layouts are byte-identical.
+	int		m_iSatchelCount;
+	int		m_iTripmineCount;
+	int		m_iDetonatableCount;	// Misc. explosives that aren't satchels or tripmines, but can be tracked and detonated
+#endif
 
 	// Ladder related data
 	EHANDLE			m_hLadder;

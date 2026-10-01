@@ -6359,6 +6359,25 @@ void CBaseEntity::AppendContextToCriteria( AI_CriteriaSet& set, const char *pref
 	}
 }
 
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Append contexts again, so they override criteria set earlier
+//-----------------------------------------------------------------------------
+void CBaseEntity::ReAppendContextCriteria( AI_CriteriaSet& set )
+{
+	// Append contexts again. This allows it to override standard criteria, including that of derived classes.
+	CWorld *world = GetWorldEntity();
+	if ( world )
+	{
+		// I didn't know this until recently, but world contexts are actually prefixed by "world".
+		// The old prefixed ones still exist, they're just not appended again.
+		world->AppendContextToCriteria( set );
+	}
+ 
+	AppendContextToCriteria( set );
+}
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: Removes expired concepts from list
 // Output : 
@@ -6542,6 +6561,44 @@ void CBaseEntity::AddContext( const char *contextName )
 		m_ResponseContexts.AddToTail( newContext );
 	}
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Add or overwrite a response context by name, with optional duration
+// Input  : duration - seconds from now; 0 means "never expires"
+//-----------------------------------------------------------------------------
+void CBaseEntity::AddContext( const char *name, const char *value, float duration )
+{
+	int iIndex = FindContextByName( name );
+	if ( iIndex != -1 )
+	{
+		// Set the existing context to the new value
+		m_ResponseContexts[iIndex].m_iszValue = AllocPooledString( value );
+		m_ResponseContexts[iIndex].m_fExpirationTime = duration ? ( gpGlobals->curtime + duration ) : 0.0f;
+		return;
+	}
+
+	ResponseContext_t newContext;
+	newContext.m_iszName = AllocPooledString( name );
+	newContext.m_iszValue = AllocPooledString( value );
+	newContext.m_fExpirationTime = duration ? ( gpGlobals->curtime + duration ) : 0.0f;
+
+	m_ResponseContexts.AddToTail( newContext );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Look up a response context's value by name
+// Output : the value, or "" if there is no such context
+//-----------------------------------------------------------------------------
+const char *CBaseEntity::GetContextValue( const char *contextName ) const
+{
+	int idx = FindContextByName( contextName );
+	if ( idx == -1 )
+		return "";
+
+	return m_ResponseContexts[ idx ].m_iszValue.ToCStr();
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 

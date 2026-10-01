@@ -377,14 +377,147 @@ AI_Response *CAI_Expresser::SpeakFindResponse( AIConcept_t concept, const char *
 	return result;
 }
 
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Find a response, taking a pre-built criteria set as the modifiers
+// Input  : modifiers - tier 2 of the merge (see the comments in the body)
+//-----------------------------------------------------------------------------
+AI_Response *CAI_Expresser::SpeakFindResponse( AIConcept_t concept, const AI_CriteriaSet &modifiers )
+{
+	IResponseSystem *rs = GetOuter()->GetResponseSystem();
+	if ( !rs )
+	{
+		Assert( !"No response system installed for CAI_Expresser::GetOuter()!!!" );
+		return NULL;
+	}
+
+	AI_CriteriaSet set;
+	// Always include the concept name
+	set.AppendCriteria( "concept", concept, CONCEPT_WEIGHT );
+
+	// Tier 1: Criteria
+	// Let our outer fill in most match criteria
+	GetOuter()->ModifyOrAppendCriteria( set );
+
+	// Append local player criteria to set, but not if this is a player doing the talking
+	if ( !GetOuter()->IsPlayer() )
+	{
+		CBasePlayer *pPlayer = UTIL_PlayerByIndex( 1 );
+		if( pPlayer )
+			pPlayer->ModifyOrAppendPlayerCriteria( set );
+	}
+
+	// Tier 2: Modifiers
+	set.MergeSet(modifiers);
+
+	// Tier 3: Contexts
+	GetOuter()->ReAppendContextCriteria( set );
+
+	// Now that we have a criteria set, ask for a suitable response
+	AI_Response *result = new AI_Response;
+	Assert( result && "new AI_Response: Returned a NULL AI_Response!" );
+	bool found = rs->FindBestResponse( set, *result, this );
+
+	if ( rr_debugresponses.GetInt() == 3 )
+	{
+		if ( ( GetOuter()->MyNPCPointer() && GetOuter()->m_debugOverlays & OVERLAY_NPC_SELECTED_BIT ) || GetOuter()->IsPlayer() )
+		{
+			const char *pszName;
+			if ( GetOuter()->IsPlayer() )
+			{
+				pszName = ((CBasePlayer*)GetOuter())->GetPlayerName();
+			}
+			else
+			{
+				pszName = GetOuter()->GetDebugName();
+			}
+
+			if ( found )
+			{
+				char response[ 256 ];
+				result->GetResponse( response, sizeof( response ) );
+
+				Warning( "RESPONSERULES: %s spoke '%s'. Found response '%s'.\n", pszName, concept, response );
+			}
+			else
+			{
+				Warning( "RESPONSERULES: %s spoke '%s'. Found no matching response.\n", pszName, concept );
+			}
+		}
+	}
+
+	if ( !found )
+	{
+		//Assert( !"rs->FindBestResponse: Returned a NULL AI_Response!" );
+		delete result;
+		return NULL;
+	}
+
+	char response[ 256 ];
+	result->GetResponse( response, sizeof( response ) );
+
+	if ( !response[0] )
+	{
+		delete result;
+		return NULL;
+	}
+
+	if ( result->GetOdds() < 100 && random->RandomInt( 1, 100 ) <= result->GetOdds() )
+	{
+		delete result;
+		return NULL;
+	}
+
+	return result;
+}
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: Dispatches the result
 // Input  : *response - 
 //-----------------------------------------------------------------------------
-bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *result, IRecipientFilter *filter /* = NULL */ )
+bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *result, IRecipientFilter *filter /* = NULL */
+#ifdef EZ2
+	, const AI_CriteriaSet *modifiers /* = NULL */
+#endif
+	 )
 {
 	char response[ 256 ];
 	result->GetResponse( response, sizeof( response ) );
+
+#ifdef EZ2
+	// AI backplane port (mapbase). A response whose text is "$name" is a
+	// substitution: replace it with that context's value, falling back to the
+	// caller's modifier criteria when the entity has no such context.
+	if (response[0] == '$')
+	{
+		const char *context = response + 1;
+		const char *replace = GetOuter()->GetContextValue(context);
+
+		// If we can't find the context, check modifiers
+		if (!replace && modifiers)
+		{
+			for (int i = 0; i < modifiers->GetCount(); i++)
+			{
+				if (FStrEq(context, modifiers->GetName(i)))
+				{
+					replace = modifiers->GetValue(i);
+					break;
+				}
+			}
+		}
+
+		if (replace)
+		{
+			// Upstream this is CGMsg( 1, CON_GROUP_CHOREO, ... ). This tree has no
+			// convar group system at all (no CGMsg, no mapbase_con_groups.h), so
+			// the message cannot be group-filtered. Plain Msg() is the closest
+			// equivalent; the substitution behaviour itself is unchanged.
+			Msg( "Replacing %s with %s...\n", response, replace );
+			Q_strncpy(response, replace, sizeof(response));
+		}
+	}
+#endif
 
 	float delay = result->GetDelay();
 	
@@ -568,6 +701,30 @@ bool CAI_Expresser::Speak( AIConcept_t concept, const char *modifiers /*= NULL*/
 	
 	return spoke;
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Speak a concept with a pre-built criteria set as the modifiers
+//-----------------------------------------------------------------------------
+bool CAI_Expresser::Speak( AIConcept_t concept, const AI_CriteriaSet& modifiers, char *pszOutResponseChosen /* = NULL*/, size_t bufsize /* = 0 */, IRecipientFilter *filter /* = NULL */ )
+{
+	AI_Response *result = SpeakFindResponse( concept, modifiers );
+	if ( !result )
+	{
+		return false;
+	}
+
+	SpeechMsg( GetOuter(), "%s (%p) spoke %s (%f)\n", STRING(GetOuter()->GetEntityName()), GetOuter(), concept, gpGlobals->curtime );
+
+	bool spoke = SpeakDispatchResponse( concept, result, filter, &modifiers );
+	if ( pszOutResponseChosen )
+	{
+		result->GetResponse( pszOutResponseChosen, bufsize );
+	}
+
+	return spoke;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -831,6 +988,33 @@ void CAI_Expresser::ClearSpokeConcept( AIConcept_t concept )
 {
 	m_ConceptHistories.Remove( concept );
 }
+#ifdef EZ2
+//-------------------------------------
+// Purpose: Return the most recently spoken concept
+// Input  : excludeConcept - optional concept to skip over in the history
+//-----------------------------------------------------------------------------
+AIConcept_t CAI_Expresser::GetLastSpokeConcept( AIConcept_t excludeConcept /* = NULL */ )
+{
+	int iLastSpokenIndex = m_ConceptHistories.InvalidIndex();
+	float flLast = 0.0f;
+	for ( int i = m_ConceptHistories.First(); i != m_ConceptHistories.InvalidIndex(); i = m_ConceptHistories.Next(i ) )
+	{
+		ConceptHistory_t *h = &m_ConceptHistories[ i ];
+
+		// If an 'exclude concept' was provided, skip over this entry in the history if it matches the exclude concept
+		if ( excludeConcept != NULL && FStrEq( m_ConceptHistories.GetElementName( i ), excludeConcept ) )
+			continue;
+
+		if ( h->timeSpoken >= flLast )
+		{
+			iLastSpokenIndex = i;
+			flLast = h->timeSpoken;
+		}
+	}
+
+	return iLastSpokenIndex != m_ConceptHistories.InvalidIndex() ? m_ConceptHistories.GetElementName( iLastSpokenIndex ) : NULL;
+}
+#endif
 
 //-------------------------------------
 

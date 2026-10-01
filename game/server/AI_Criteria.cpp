@@ -76,6 +76,21 @@ void AI_CriteriaSet::AppendCriteria( const char *criteria, const char *value /*=
 //-----------------------------------------------------------------------------
 // Removes criteria in a set
 //-----------------------------------------------------------------------------
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Merge another criteria set into this one
+//-----------------------------------------------------------------------------
+void AI_CriteriaSet::MergeSet( const AI_CriteriaSet& src )
+{
+	for ( short i = src.m_Lookup.FirstInorder(); 
+		i != src.m_Lookup.InvalidIndex(); 
+		i = src.m_Lookup.NextInorder( i ) )
+	{
+		m_Lookup.Insert( src.m_Lookup[ i ] );
+	}
+}
+#endif
+
 void AI_CriteriaSet::RemoveCriteria( const char *criteria )
 {
 	int idx = FindCriterionIndex( criteria );
@@ -298,6 +313,16 @@ void AI_Response::GetResponse( char *buf, size_t buflen ) const
 {
 	GetName( buf, buflen );
 }
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Copy out the matching response rule's name
+// Output : char const
+//-----------------------------------------------------------------------------
+void AI_Response::GetRule( char *buf, size_t buflen ) const
+{
+	Q_strncpy( buf, m_szMatchingRule, buflen );
+}
+#endif
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Input  : type - 

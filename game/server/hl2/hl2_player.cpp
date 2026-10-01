@@ -83,6 +83,13 @@ ConVar hl2_walkspeed( "hl2_walkspeed", "150" );
 ConVar hl2_normspeed( "hl2_normspeed", "190" );
 ConVar hl2_sprintspeed( "hl2_sprintspeed", "320" );
 
+#ifdef EZ2
+// AI backplane port. Gate for CHL2_Player::CanAutoSwitchToNextBestWeapon(), which
+// EZ2's player overrides to suppress weapon auto-switch while in combat. Only the
+// ez2 profile defines the virtual, so the convar only exists there.
+ConVar player_autoswitch_enabled( "player_autoswitch_enabled", "1", FCVAR_NONE, "This convar was added by Mapbase to toggle whether players automatically switch to their 'best' weapon upon picking up ammo for it after it was dry." );
+#endif
+
 ConVar hl2_darkness_flashlight_factor ( "hl2_darkness_flashlight_factor", "1" );
 
 #ifdef HL2MP
@@ -2642,6 +2649,9 @@ int CHL2_Player::GiveAmmo( int nCount, int nAmmoIndex, bool bSuppressSound)
 
 		if ( pWeapon && pWeapon->GetPrimaryAmmoType() == nAmmoIndex )
 		{
+#ifdef EZ2
+			if (CanAutoSwitchToNextBestWeapon(pWeapon))
+#endif
 			SwitchToNextBestWeapon(GetActiveWeapon());
 		}
 	}
@@ -3305,6 +3315,45 @@ void CHL2_Player::UpdateClientData( void )
 	}
 #endif // HL2_EPISODIC
 
+#ifdef EZ2
+	// Update SLAMs. Minimal mapbase backplane (TRANSPLANT-A §4.1): the three
+	// counts are predicted (see hl2_playerlocaldata.h), and c_ez2_player.cpp
+	// diffs them against its own handle lists to know when to recollect. Pruning
+	// here is what keeps a detonated satchel from lingering in the glow list.
+	if (m_hActiveSatchels.Count() > 0)
+	{
+		// Clean up nonexistent satchels
+		for (int i = m_hActiveSatchels.Count()-1; i >= 0; i--)
+		{
+			if (m_hActiveSatchels[i] == NULL || m_hActiveSatchels[i]->IsMarkedForDeletion())
+				m_hActiveSatchels.Remove( i );
+		}
+	}
+	m_HL2Local.m_iSatchelCount = m_hActiveSatchels.Count();
+
+	if (m_hActiveTripmines.Count() > 0)
+	{
+		// Clean up nonexistent tripmines
+		for (int i = m_hActiveTripmines.Count()-1; i >= 0; i--)
+		{
+			if (m_hActiveTripmines[i] == NULL || m_hActiveTripmines[i]->IsMarkedForDeletion())
+				m_hActiveTripmines.Remove( i );
+		}
+	}
+	m_HL2Local.m_iTripmineCount = m_hActiveTripmines.Count();
+
+	if (m_hActiveDetonatables.Count() > 0)
+	{
+		// Clean up nonexistent detonatables
+		for (int i = m_hActiveDetonatables.Count()-1; i >= 0; i--)
+		{
+			if (m_hActiveDetonatables[i] == NULL || m_hActiveDetonatables[i]->IsMarkedForDeletion())
+				m_hActiveDetonatables.Remove( i );
+		}
+	}
+	m_HL2Local.m_iDetonatableCount = m_hActiveDetonatables.Count();
+#endif
+
 	BaseClass::UpdateClientData();
 }
 
@@ -3619,6 +3668,76 @@ void CHL2_Player::PlayUseDenySound()
 	m_bPlayUseDenySound = true;
 }
 
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: May the player auto-switch to pWeapon when ammo for it arrives?
+//-----------------------------------------------------------------------------
+bool CHL2_Player::CanAutoSwitchToNextBestWeapon( CBaseCombatWeapon *pWeapon )
+{
+	return player_autoswitch_enabled.GetBool();
+}
+#endif
+
+#ifdef EZ2
+// Minimal mapbase backplane (TRANSPLANT-A §4.1): the SLAM/detonatable glow-list
+// hooks. ez2_player.cpp owns CPointDetonatable and calls these; the satchel and
+// tripmine callers arrive with the npc_satchel/npc_tripmine roster in M3.
+void CHL2_Player::OnDropSatchel( CBaseEntity *pSatchel )
+{
+	m_hActiveSatchels.AddToTail( pSatchel );
+}
+
+void CHL2_Player::OnSetupTripmine( CBaseEntity *pTripmine )
+{
+	m_hActiveTripmines.AddToTail( pTripmine );
+}
+
+void CHL2_Player::OnSetupDetonatable( CBaseEntity *pDetonatable )
+{
+	m_hActiveDetonatables.AddToTail( pDetonatable );
+}
+
+void CHL2_Player::OnSatchelExploded( CBaseEntity *pSatchel, CBaseEntity *pAttacker )
+{
+	// send a message to the client, to notify the hud of the loss
+	CSingleUserRecipientFilter user( this );
+	user.MakeReliable();
+	UserMessageBegin( user, "SLAMExploded" );
+		WRITE_BOOL( pAttacker != this );
+	MessageEnd();
+
+	m_hActiveSatchels.FindAndRemove( pSatchel );
+}
+
+void CHL2_Player::OnTripmineExploded( CBaseEntity *pTripmine, CBaseEntity *pAttacker )
+{
+	// send a message to the client, to notify the hud of the loss
+	CSingleUserRecipientFilter user( this );
+	user.MakeReliable();
+	UserMessageBegin( user, "SLAMExploded" );
+		WRITE_BOOL( pAttacker != this );
+	MessageEnd();
+
+	m_hActiveTripmines.FindAndRemove( pTripmine );
+}
+
+void CHL2_Player::OnDetonatableExploded( CBaseEntity *pDetonatable, CBaseEntity *pAttacker )
+{
+	// send a message to the client, to notify the hud of the loss
+	CSingleUserRecipientFilter user( this );
+	user.MakeReliable();
+	UserMessageBegin( user, "SLAMExploded" );
+		WRITE_BOOL( pAttacker != this );
+	MessageEnd();
+
+	m_hActiveDetonatables.FindAndRemove( pDetonatable );
+}
+
+void CHL2_Player::OnDetonatableDisabled( CBaseEntity *pDetonatable )
+{
+	m_hActiveDetonatables.FindAndRemove( pDetonatable );
+}
+#endif
 
 void CHL2_Player::ItemPostFrame()
 {

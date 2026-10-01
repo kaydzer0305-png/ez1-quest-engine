@@ -1593,6 +1593,20 @@ bool CAI_PlayerAlly::SpeakIfAllowed( AIConcept_t concept, const char *modifiers,
 	return false;
 }
 
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: SpeakIfAllowed with a pre-built criteria set (mapbase)
+//-----------------------------------------------------------------------------
+bool CAI_PlayerAlly::SpeakIfAllowed( AIConcept_t concept, AI_CriteriaSet& modifiers, bool bRespondingToPlayer, char *pszOutResponseChosen, size_t bufsize ) 
+{ 
+	if ( IsAllowedToSpeak( concept, bRespondingToPlayer ) )
+	{
+		return Speak( concept, modifiers, pszOutResponseChosen, bufsize );
+	}
+	return false;
+}
+#endif
+
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 void CAI_PlayerAlly::ModifyOrAppendCriteria( AI_CriteriaSet& set )

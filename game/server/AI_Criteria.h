@@ -26,6 +26,12 @@ public:
 	~AI_CriteriaSet();
 
 	void AppendCriteria( const char *criteria, const char *value = "", float weight = 1.0f );
+#ifdef EZ2
+	// AI backplane port (mapbase). Fold another set into this one, overwriting
+	// matching criteria. Used by the criteria-set Speak() path, where the
+	// caller's modifiers are tier 2 of a three-tier merge.
+	void MergeSet( const AI_CriteriaSet& src );
+#endif
 	void RemoveCriteria( const char *criteria );
 	
 	void Describe();
@@ -182,6 +188,13 @@ public:
 
 	void			GetName( char *buf, size_t buflen ) const;
 	void			GetResponse( char *buf, size_t buflen ) const;
+#ifdef EZ2
+	// AI backplane port: the name of the response rule that matched, for
+	// EZ2's speech system to feed into its own criteria. m_szMatchingRule was
+	// already declared, populated (AI_Response::Init) and networked here; only
+	// this accessor was missing.
+	void			GetRule( char *buf, size_t buflen ) const;
+#endif
 	const AI_ResponseParams *GetParams() const { return &m_Params; }
 	ResponseType_t	GetType() const { return (ResponseType_t)m_Type; }
 	soundlevel_t	GetSoundLevel() const;

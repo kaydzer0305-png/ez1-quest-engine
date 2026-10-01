@@ -165,6 +165,12 @@ BEGIN_DATADESC( CBaseAnimating )
 	DEFINE_KEYFIELD( m_nBody, FIELD_INTEGER, "body" ),
 	DEFINE_INPUT( m_nBody, FIELD_INTEGER, "SetBodyGroup" ),
 	DEFINE_KEYFIELD( m_nHitboxSet, FIELD_INTEGER, "hitboxset" ),
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1) -- backs
+	// CBaseAnimating::IsDisplacementImpossible() for the EZ2 displacer pistol.
+	DEFINE_KEYFIELD( m_bDisplacementImpossible, FIELD_BOOLEAN, "DisplacementImpossible" ),
+	DEFINE_INPUTFUNC( FIELD_VOID, "SetDisplacementImpossible", InputSetDisplacementImpossible ),
+#endif
 	DEFINE_KEYFIELD( m_nSequence, FIELD_INTEGER, "sequence" ),
 	DEFINE_ARRAY( m_flPoseParameter, FIELD_FLOAT, CBaseAnimating::NUM_POSEPAREMETERS ),
 	DEFINE_ARRAY( m_flEncodedController,	FIELD_FLOAT, CBaseAnimating::NUM_BONECTRLS ),

@@ -45,5 +45,27 @@ enum
 #define DMG_MISSILEDEFENSE	(DMG_LASTGENERICFLAG<<2)	// The only kind of damage missiles take. (special missile defense)
 
 
+#ifdef EZ2
+//--------------
+// ENTROPY : ZERO DEFINITIONS
+//--------------
+// Minimal mapplane backplane (TRANSPLANT-A §4.1): ez2_player.cpp compares
+// GetBonusChallenge() against these. Upstream declares them under #ifdef EZ;
+// the values are positional, so the EZ2 profile must keep the same order.
+enum
+{
+	EZ_CHALLENGE_NONE,
+	EZ_CHALLENGE_DAMAGE,
+	EZ_CHALLENGE_BULLETS,
+	EZ_CHALLENGE_TIME,
+	EZ_CHALLENGE_KILLS,
+	EZ_CHALLENGE_MASS,
+
+	// Special Challenges
+	// These are VScript-driven challenges which can be defined by users.
+	EZ_CHALLENGE_SPECIAL = 100,
+};
+#endif
+
 
 #endif // HL2_SHAREDDEFS_H

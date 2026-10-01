@@ -35,6 +35,13 @@ bool IsRunningScriptedScene( CBaseFlex *pActor, bool bIgnoreInstancedScenes = tr
 bool IsRunningScriptedSceneAndNotPaused( CBaseFlex *pActor, bool bIgnoreInstancedScenes = true );
 bool IsRunningScriptedSceneWithSpeech( CBaseFlex *pActor, bool bIgnoreInstancedScenes = false );
 bool IsRunningScriptedSceneWithSpeechAndNotPaused( CBaseFlex *pActor, bool bIgnoreInstancedScenes = false );
+#ifdef EZ2
+// AI backplane port (mapbase): "is this actor's speech line playing right now?",
+// as opposed to IsRunningScriptedSceneWithSpeech()'s "does this scene have
+// unplayed speech?". Used by the EZ2 speech AI so Bad Cop does not talk over a
+// cutscene.
+bool IsTalkingInAScriptedScene( CBaseFlex *pActor, bool bIgnoreInstancedScenes = false );
+#endif
 float GetSceneDuration( char const *pszScene );
 int GetSceneSpeechCount( char const *pszScene );
 bool IsInInterruptableScenes( CBaseFlex *pActor );
