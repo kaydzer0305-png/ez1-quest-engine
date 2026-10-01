@@ -101,7 +101,7 @@
             android:excludeFromRecents="true"
             android:resizeableActivity="false"
             android:screenOrientation="landscape"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density"
             android:process=":engine"
             android:exported="false">
