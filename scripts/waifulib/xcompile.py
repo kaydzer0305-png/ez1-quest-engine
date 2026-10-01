@@ -125,8 +125,16 @@ class Android:
 		'''
 		return self.clang
 
+	def is_win32_host(self):
+		return sys.platform.startswith('win32') or sys.platform.startswith('cygwin')
+
 	def is_hardfp(self):
 		return self.is_hardfloat
+
+	def clang_target_triplet(self):
+		# Same triplet the NDK .cmd wrappers pass via --target, without the
+		# trailing '-' used by gen_toolchain_path (e.g. aarch64-linux-android21)
+		return '%s%d' % (self.ndk_triplet(llvm_toolchain = True), self.api)
 
 	def ndk_triplet(self, llvm_toolchain = False, toolchain_folder = False):
 		if self.is_x86():
@@ -196,19 +204,42 @@ class Android:
 	def gen_binutils_path(self):
 		return os.path.join(self.gen_gcc_toolchain_path(), self.ndk_triplet(), 'bin')
 
+	def win32_clang_shim(self, prog):
+		# Triplet-prefixed copies of NDK clang living NEXT TO the real
+		# binaries in the NDK bin dir: argv[0] inference makes bare
+		# invocations default to the Android target (replicating the NDK
+		# wrapper scripts with a real executable), AND the driver discovers
+		# sysroot/libs relative to its own location (a relocated copy
+		# cannot link: crtbegin/libc++ not found). Override the NDK root
+		# with ANDROID_NDK_SHIMS if the NDK lives elsewhere.
+		shimdir = os.getenv('ANDROID_NDK_SHIMS', os.path.join(
+			self.ndk_home, 'toolchains', 'llvm', 'prebuilt',
+			'windows-x86_64', 'bin'))
+		basename = 'aarch64-linux-android%d-%s.exe' % (self.api, prog)
+		return os.path.join(shimdir, basename)
+
 	def cc(self):
 		if self.is_host():
 			return 'clang --target=%s%d' % (self.ndk_triplet(), self.api)
+		if self.is_clang() and self.is_win32_host():
+			return self.win32_clang_shim('clang')
 		return self.gen_toolchain_path() + ('clang' if self.is_clang() else 'gcc')
 
 	def cxx(self):
 		if self.is_host():
 			return 'clang++ --target=%s%d' % (self.ndk_triplet(), self.api)
+		if self.is_clang() and self.is_win32_host():
+			return self.win32_clang_shim('clang++')
 		return self.gen_toolchain_path() + ('clang++' if self.is_clang() else 'g++')
 
 	def strip(self):
 		if self.is_host():
 			return 'llvm-strip'
+		if self.is_win32_host():
+			# NDK unified toolchain keeps llvm-strip next to clang, not in
+			# the legacy per-triplet binutils dir gen_binutils_path() yields.
+			# Extension required: waf checks executability of the exact path.
+			return os.path.join(self.gen_gcc_toolchain_path(), 'bin', 'llvm-strip.exe')
 		return os.path.join(self.gen_binutils_path(), 'strip')
 
 	def system_stl(self):
@@ -236,6 +267,10 @@ class Android:
 
 	def cflags(self, cxx = False):
 		cflags = []
+
+		if self.is_clang() and not self.is_host() and self.is_win32_host():
+			# Bypassed NDK wrapper (.cmd) supplies these; pass directly.
+			cflags += ['--target=%s' % self.clang_target_triplet(), '-fno-addrsig']
 
 		if self.ndk_rev <= ANDROID_NDK_SYSROOT_FLAG_MAX:
 			cflags += ['--sysroot=%s' % (self.sysroot())]
@@ -285,6 +320,8 @@ class Android:
 	# they go before object list
 	def linkflags(self):
 		linkflags = []
+		if self.is_clang() and not self.is_host() and self.is_win32_host():
+			linkflags += ['--target=%s' % self.clang_target_triplet()]
 		if self.is_host():
 			linkflags += ['--gcc-toolchain=%s' % self.gen_gcc_toolchain_path()]
 
@@ -295,6 +332,8 @@ class Android:
 
 		if self.is_clang() or self.is_host():
 			linkflags += ['-fuse-ld=lld']
+			if self.is_win32_host():
+				linkflags += ['-Wl,--no-threads']
 
 		linkflags += ['-Wl,--hash-style=both','-Wl,--no-undefined']
 		return linkflags

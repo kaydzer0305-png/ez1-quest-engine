@@ -44,6 +44,13 @@ def build(bld):
 		'../public/tier1'
 	] + bld.env.INCLUDES_SDL2
 
+	if os.name == 'nt' and bld.env.DEST_OS == 'android':
+		# Windows hosts have no mesa GL headers (Linux CI gets them from the
+		# system). GL/GL.h here is a documented GLES2-based shim (types only;
+		# togl resolves every entry point at runtime), GL/glext.h and
+		# KHR/khrplatform.h are genuine Khronos files. Override with GL_SHIMS.
+		includes = [os.getenv('GL_SHIMS', r'C:\Users\neilr\gl-shims')] + includes
+
 	defines = []
 
 	libs = ['tier0','tier1','tier2','vstdlib','mathlib']
