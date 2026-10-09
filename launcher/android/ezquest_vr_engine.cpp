@@ -281,7 +281,17 @@ void EZQuestVrOnFirstPresent( void )
                 return;
         g_bootRequested = 1;
 
-        const int wantEngine = !getenv( "EZQUEST_VR_TRY_ENGINE" ) ||
+        // Opt-in only. The default used to boot the full engine, but
+        // LauncherMainAndroid always SDL-inits video, which cannot succeed
+        // under this bare NativeActivity: SDL_Init fails ("didn't initialize
+        // properly") and a later JNI CallStaticObjectMethod with a NULL
+        // jclass aborts the whole :engine process (SIGABRT, 2026-10-09),
+        // taking the healthy XR loop down with it. Real
+        // engine-through-the-seam rendering needs the toggles external-FBO
+        // path, which is not in this tree yet -- so trying is never useful
+        // until that lands. Set EZQUEST_VR_TRY_ENGINE=1 explicitly to re-arm
+        // this scaffolding for integration experiments.
+        const int wantEngine = getenv( "EZQUEST_VR_TRY_ENGINE" ) &&
                                EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );
         const int wantStub = EnvTruthy( "EZQUEST_VR_STUB_HOOK" );
 

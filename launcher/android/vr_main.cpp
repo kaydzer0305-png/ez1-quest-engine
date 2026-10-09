@@ -598,6 +598,12 @@ static void EzPollEvents( void )
                 case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
                         EZLOG( "reference space change pending" );
                         break;
+                case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED:
+                        // The runtime resolved or switched the active
+                        // controller profile. Informational: input sync
+                        // re-reads bindings every frame anyway.
+                        EZLOG( "interaction profile changed" );
+                        break;
                 default:
                         EZLOG( "unhandled event type %d", (int )event.type );
                         break;
@@ -832,27 +838,48 @@ static void EzVrRun( JNIEnv *env )
 
         EZLOG( "entering frame loop" );
         uint64_t frameIndex = 0;
+        uint64_t emptyIndex = 0;
+        static bool loopLogged = false;
         while ( g_app.running )
         {
                 EzPollEvents();
                 if ( !g_app.running )
                         break;
 
-                if ( !g_app.sessionBegun || !g_app.rendering )
+                if ( !g_app.sessionBegun )
                 {
-                        // Idle until the runtime focuses us; keep the thread responsive.
-                        // Log periodically so a stuck session (READY forever, 0 frames)
-                        // is obvious in logcat instead of silent until the Java timeout.
+                        // READY has not arrived yet, so there is no running
+                        // session to pump. Idle until xrBeginSession.
+                        // Log periodically so a session that never begins is
+                        // obvious in logcat instead of silent until the Java
+                        // timeout.
                         static uint64_t idleSpins = 0;
                         if ( ++idleSpins % 1000 == 1 )
                         {
-                                EZLOG( "waiting for session focus: begun=%d rendering=%d state=%s (need VISIBLE/FOCUSED to present)",
-                                                (int )g_app.sessionBegun, (int )g_app.rendering,
+                                EZLOG( "waiting for session begin: state=%s",
                                                 EzSessionStateName( g_app.sessionState ) );
                         }
                         struct timespec ts = { 0, 5 * 1000 * 1000 };
                         nanosleep( &ts, NULL );
                         continue;
+                }
+
+                // The session is running, so pump the frame loop
+                // unconditionally. xrBeginSession's contract is "the
+                // application should then start its frame loop", and
+                // xrWaitFrame is legal in every running state (READY
+                // included -- only a non-running session errors with
+                // XR_ERROR_SESSION_NOT_RUNNING). The old code waited for
+                // VISIBLE/FOCUSED before the first xrWaitFrame, so a runtime
+                // that advances the session in response to frame cadence
+                // never had a reason to move us past READY: a deadlock.
+                // frameState.shouldRender below -- not the session state --
+                // is what gates actual drawing.
+                if ( !loopLogged )
+                {
+                        loopLogged = true;
+                        EZLOG( "session running (state=%s): entering frame pump",
+                                        EzSessionStateName( g_app.sessionState ) );
                 }
 
                 XrFrameState frameState = {};
@@ -911,6 +938,16 @@ static void EzVrRun( JNIEnv *env )
                         {
                                 EzSetFailedFmt( "xrEndFrame(empty) failed" );
                                 break;
+                        }
+                        // Sign of life while pumped but not yet visible: proves
+                        // the frame loop is turning (so a stall past this point
+                        // is the runtime withholding shouldRender, not us).
+                        if ( (++emptyIndex & 511) == 1 )
+                        {
+                                EZLOG( "frame pump alive: %llu empty frames, state=%s rendering=%d (shouldRender=0)",
+                                                (unsigned long long )emptyIndex,
+                                                EzSessionStateName( g_app.sessionState ),
+                                                (int )g_app.rendering );
                         }
                 }
         }
