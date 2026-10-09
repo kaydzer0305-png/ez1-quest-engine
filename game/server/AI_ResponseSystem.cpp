@@ -460,7 +460,11 @@ struct Rule
 		m_bMatchOnce = false;
 		m_bEnabled = true;
 		m_szContext = NULL;
+#ifdef EZ2
+		m_iContextFlags = 0;
+#else
 		m_bApplyContextToWorld = false;
+#endif
 	}
 
 	Rule& operator =( const Rule& src )
@@ -486,7 +490,11 @@ struct Rule
 		SetContext( src.m_szContext );
 		m_bMatchOnce = src.m_bMatchOnce;
 		m_bEnabled = src.m_bEnabled;
+#ifdef EZ2
+		m_iContextFlags = src.m_iContextFlags;
+#else
 		m_bApplyContextToWorld = src.m_bApplyContextToWorld;
+#endif
 		return *this;
 	}
 
@@ -510,7 +518,11 @@ struct Rule
 		SetContext( src.m_szContext );
 		m_bMatchOnce = src.m_bMatchOnce;
 		m_bEnabled = src.m_bEnabled;
+#ifdef EZ2
+		m_iContextFlags = src.m_iContextFlags;
+#else
 		m_bApplyContextToWorld = src.m_bApplyContextToWorld;
+#endif
 	}
 
 	~Rule()
@@ -529,14 +541,23 @@ struct Rule
 	bool	IsEnabled() const { return m_bEnabled; }
 	void	Disable() { m_bEnabled = false; }
 	bool	IsMatchOnce() const { return m_bMatchOnce; }
+#ifdef EZ2
+	int		GetContextFlags() const { return m_iContextFlags; }
+	bool	IsApplyContextToWorld() const { return (m_iContextFlags & APPLYCONTEXT_WORLD) != 0; }
+#else
 	bool	IsApplyContextToWorld() const { return m_bApplyContextToWorld; }
+#endif
 
 	// Indices into underlying criteria and response dictionaries
 	CUtlVector< unsigned short >	m_Criteria;
 	CUtlVector< unsigned short>		m_Responses;
 
 	char				*m_szContext;
+#ifdef EZ2
+	int					m_iContextFlags;
+#else
 	bool				m_bApplyContextToWorld : 1;
+#endif
 
 	bool				m_bMatchOnce : 1;
 	bool				m_bEnabled : 1;
@@ -1743,11 +1764,19 @@ bool CResponseSystem::FindBestResponse( const AI_CriteriaSet& set, AI_Response& 
 	char ruleName[ 128 ];
 	char responseName[ 128 ];
 	const char *context;
+#ifdef EZ2
+	int contextflags;
+#else
 	bool bcontexttoworld;
+#endif
 	ruleName[ 0 ] = 0;
 	responseName[ 0 ] = 0;
 	context = NULL;
+#ifdef EZ2
+	contextflags = 0;
+#else
 	bcontexttoworld = false;
+#endif
 	if ( bestRule != -1 )
 	{
 		Rule *r = &m_Rules[ bestRule ];
@@ -1768,12 +1797,20 @@ bool CResponseSystem::FindBestResponse( const AI_CriteriaSet& set, AI_Response& 
 			r->Disable();
 		}
 		context = r->GetContext();
+#ifdef EZ2
+		contextflags = r->GetContextFlags();
+#else
 		bcontexttoworld = r->IsApplyContextToWorld();
+#endif
 
 		valid = true;
 	}
 
+#ifdef EZ2
+	response.Init( responseType, responseName, set, rp, ruleName, context, contextflags );
+#else
 	response.Init( responseType, responseName, set, rp, ruleName, context, bcontexttoworld );
+#endif
 
 	if ( showResult )
 	{
@@ -1921,6 +1958,7 @@ void CResponseSystem::LoadFromBuffer( const char *scriptfile, const char *buffer
 {
 	includedFiles.Allocate( scriptfile );
 	PushScript( scriptfile, (unsigned char * )buffer );
+	Msg( "EZDIAG: response script begin: %s\n", scriptfile );
 
 	if( rr_dumpresponses.GetBool() )
 	{
@@ -1965,6 +2003,9 @@ void CResponseSystem::LoadFromBuffer( const char *scriptfile, const char *buffer
 			break;
 		}
 	}
+
+	Msg( "EZDIAG: response script done: %s (%i rules, %i criteria, %i responses)\n",
+		scriptfile, m_Rules.Count(), m_Criteria.Count(), m_Responses.Count() );
 
 	if ( m_ScriptStack.Count() == 1 )
 	{
@@ -2410,6 +2451,12 @@ int CResponseSystem::ParseOneCriterion( const char *criterionName )
 	}
 
 	int idx = m_Criteria.Insert( criterionName, newCriterion );
+	static int s_criteriaInserts = 0;
+	if ( ( ++s_criteriaInserts % 512 ) == 0 )
+	{
+		Msg( "EZDIAG: criteria inserts so far: %d (dict=%d), last '%s'\n",
+			s_criteriaInserts, m_Criteria.Count(), criterionName );
+	}
 	return idx;
 }
 
@@ -2529,9 +2576,32 @@ void CResponseSystem::ParseRule( void )
 
 		if ( !Q_stricmp( token, "applyContextToWorld" ) )
 		{
+#ifdef EZ2
+			newRule.m_iContextFlags |= APPLYCONTEXT_WORLD;
+#else
 			newRule.m_bApplyContextToWorld = true;
+#endif
 			continue;
 		}
+
+#ifdef EZ2
+		// AI backplane port: Mapbase rule keywords EZ2's talker scripts use.
+		// Without these the token falls through to the inline-criteria branch,
+		// which desyncs the parser (it eats the next line's keyword as a value)
+		// and can wedge ParseRule in an unget/parse ping-pong that fabricates
+		// criteria until the 16-bit criteria dict overflows.
+		if ( !Q_stricmp( token, "applyContextToSquad" ) )
+		{
+			newRule.m_iContextFlags |= APPLYCONTEXT_SQUAD;
+			continue;
+		}
+
+		if ( !Q_stricmp( token, "applyContextToEnemy" ) )
+		{
+			newRule.m_iContextFlags |= APPLYCONTEXT_ENEMY;
+			continue;
+		}
+#endif
 
 		if ( !Q_stricmp( token, "applyContext" ) )
 		{
@@ -2591,6 +2661,19 @@ void CResponseSystem::ParseRule( void )
 			}
 			continue;
 		}
+
+#ifdef EZ2
+		// A root command here means the rule body was never closed (desync
+		// upstream of this point). ParseOneCriterion would unget it as "part of
+		// the next definition", handing the same token straight back to us and
+		// spinning this loop forever. Bail out instead.
+		if ( IsRootCommand() )
+		{
+			ResponseWarning( "Unterminated rule '%s', resuming at '%s'\n", ruleName, token );
+			Unget();
+			break;
+		}
+#endif
 
 		// It's an inline criteria, generate a name and parse it in
 		Q_snprintf( sz, sizeof( sz ), "[%s%03i]", ruleName, ++instancedCriteria );
@@ -2789,7 +2872,11 @@ void CResponseSystem::CopyRuleFrom( Rule *pSrcRule, int iRule, CResponseSystem *
 	dstRule.SetContext( pSrcRule->GetContext() );
 	dstRule.m_bMatchOnce = pSrcRule->m_bMatchOnce;
 	dstRule.m_bEnabled = pSrcRule->m_bEnabled;
+#ifdef EZ2
+	dstRule.m_iContextFlags = pSrcRule->m_iContextFlags;
+#else
 	dstRule.m_bApplyContextToWorld = pSrcRule->m_bApplyContextToWorld;
+#endif
 
 	// Copy off criteria.
 	CopyCriteriaFrom( pSrcRule, &dstRule, pCustomSystem );

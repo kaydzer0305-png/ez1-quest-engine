@@ -237,6 +237,11 @@ protected:
 
 	void SpeechMsg( CBaseEntity *pFlex, PRINTF_FORMAT_STRING const char *pszFormat, ... );
 
+#ifdef EZ2
+	// AI backplane port: Mapbase applyContext arithmetic ("key:+2:duration").
+	char *ParseApplyContext( const char *szContext );
+#endif
+
 	// --------------------------------
 	
 	CAI_ExpresserSink *GetSink() { return m_pSink; }

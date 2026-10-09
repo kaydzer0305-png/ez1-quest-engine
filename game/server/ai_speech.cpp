@@ -16,6 +16,10 @@
 #include "AI_Criteria.h"
 #include "isaverestore.h"
 #include "sceneentity.h"
+#ifdef EZ2
+#include "ai_squad.h"
+#include "hl2_player.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include <tier0/memdbgon.h>
@@ -608,6 +612,81 @@ bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *res
 			NDebugOverlay::Text( vPrintPos, CFmtStr( "%s: %s", concept, response ), true, 1.5 );
 		}
 
+#ifdef EZ2
+		// AI backplane port: Mapbase applyContext targeting (self/squad/enemy/world).
+		if ( result->GetContext() )
+		{
+			const char *pszContext = result->GetContext();
+
+			// Check for operators. Upstream does Q_strstr(...)+1 unconditionally,
+			// which dereferences 0x1 when the context has no colon; check first.
+			const char *pColon = Q_strstr( pszContext, ":" );
+			if ( pColon && ( pColon[1] == '+' || pColon[1] == '-' ||
+				pColon[1] == '*' || pColon[1] == '/' ) )
+			{
+				pszContext = ParseApplyContext( pszContext );
+			}
+
+			int iContextFlags = result->GetContextFlags();
+			if ( iContextFlags & APPLYCONTEXT_SQUAD )
+			{
+				CAI_BaseNPC *pNPC = GetOuter()->MyNPCPointer();
+				if ( pNPC && pNPC->GetSquad() )
+				{
+					AISquadIter_t iter;
+					CAI_BaseNPC *pSquadmate = pNPC->GetSquad()->GetFirstMember( &iter );
+					while ( pSquadmate )
+					{
+						pSquadmate->AddContext( pszContext );
+
+						pSquadmate = pNPC->GetSquad()->GetNextMember( &iter );
+					}
+				}
+				// Apply to the player's squad too. Upstream EZ2 iterates
+				// pNPC->GetSquad() here; that is an upstream bug (pNPC is the
+				// player, whose NPC squad is NULL), fixed by iterating the
+				// player squad being applied to.
+				else if ( GetOuter()->IsPlayer() )
+				{
+					CHL2_Player *pPlayer = static_cast<CHL2_Player*>( GetOuter() );
+					Assert( pPlayer );
+
+					AISquadIter_t iter;
+					CAI_Squad *pPlayerSquad = pPlayer->GetPlayerSquad();
+					if ( pPlayerSquad )
+					{
+						CAI_BaseNPC *pSquadmate = pPlayerSquad->GetFirstMember( &iter );
+						while ( pSquadmate )
+						{
+							pSquadmate->AddContext( pszContext );
+
+							pSquadmate = pPlayerSquad->GetNextMember( &iter );
+						}
+					}
+				}
+			}
+			if ( iContextFlags & APPLYCONTEXT_ENEMY )
+			{
+				CBaseEntity *pEnemy = GetOuter()->GetEnemy();
+				if ( pEnemy )
+				{
+					pEnemy->AddContext( pszContext );
+				}
+			}
+			if ( iContextFlags & APPLYCONTEXT_WORLD )
+			{
+				CBaseEntity *pEntity = CBaseEntity::Instance( engine->PEntityOfEntIndex( 0 ) );
+				if ( pEntity )
+				{
+					pEntity->AddContext( pszContext );
+				}
+			}
+			if ( iContextFlags == 0 || iContextFlags & APPLYCONTEXT_SELF )
+			{
+				GetOuter()->AddContext( pszContext );
+			}
+		}
+#else
 		if ( result->IsApplyContextToWorld() )
 		{
 			CBaseEntity *pEntity = CBaseEntity::Instance( engine->PEntityOfEntIndex( 0 ) );
@@ -620,6 +699,7 @@ bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *res
 		{
 			GetOuter()->AddContext( result->GetContext() );
 		}
+#endif
 		SetSpokeConcept( concept, result );
 	}
 	else
@@ -1077,6 +1157,67 @@ void CAI_Expresser::SpeechMsg( CBaseEntity *pFlex, const char *pszFormat, ... )
 	}
 	UTIL_LogPrintf( "%s", string );
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: AI backplane port (Mapbase): applyContext arithmetic, e.g.
+// "key:+2:duration" adds 2 to the current value of "key" on the speaker.
+//-----------------------------------------------------------------------------
+char *CAI_Expresser::ParseApplyContext( const char *szContext )
+{
+	char szKey[128];
+	char szValue[128];
+	float flDuration = 0.0;
+
+	SplitContext( szContext, szKey, sizeof( szKey ), szValue, sizeof( szValue ), &flDuration );
+
+	// This is the value without the operator
+	const char *pszValue = szValue + 1;
+
+	// This is the operator itself
+	char cOperator = szValue[0];
+
+	// This is the value to operate with (e.g. the "7" in "+7")
+	float flNewValue = atof( pszValue );
+
+	if ( flNewValue == 0.0f )
+	{
+		// If it's really 0, then this is a waste of time
+		Warning( "\"%s\" was detected by applyContext operators as an operable number, but it's not.\n", szValue );
+		return (char *)szContext;
+	}
+
+	// This is the existing value; will be operated upon and become the final assignment
+	float flValue = 0.0f;
+	const char *szExistingValue = GetOuter()->GetContextValue( szKey );
+	if ( szExistingValue )
+		flValue = atof( szExistingValue );
+
+	// Do the operation based on what the character was
+	switch ( cOperator )
+	{
+		case '+':		flValue += flNewValue;	break;
+		case '-':		flValue -= flNewValue;	break;
+		case '*':		flValue *= flNewValue;	break;
+		case '/':		flValue /= flNewValue;	break;
+	}
+
+	Q_snprintf( szValue, sizeof( szValue ), "%f", flValue );
+
+	// Remove all trailing 0's from the float to maintain whole integers
+	int i;
+	for ( i = strlen( szValue ) - 1; szValue[i] == '0'; i-- )
+	{
+		szValue[i] = '\0';
+	}
+
+	// If there were only zeroes past the period, this is a whole number. Remove the period
+	if ( szValue[i] == '.' )
+		szValue[i] = '\0';
+
+	return UTIL_VarArgs( "%s:%s:%f", szKey, szValue, flDuration );
+}
+#endif
 
 
 //-----------------------------------------------------------------------------

@@ -34,6 +34,11 @@ STUB_WEAPON_CLASS( weapon_smg1, WeaponSMG1, C_HLSelectFireMachineGun );
 STUB_WEAPON_CLASS( weapon_357, Weapon357, C_BaseHLCombatWeapon );
 STUB_WEAPON_CLASS( weapon_crossbow, WeaponCrossbow, C_BaseHLCombatWeapon );
 STUB_WEAPON_CLASS( weapon_slam, Weapon_SLAM, C_BaseHLCombatWeapon );
+#ifdef EZ2
+// The ez2 server registers DT_DisplacerPistol; without this client RecvTable
+// the listen-server signon dies: "Client missing DT class CDisplacerPistol".
+STUB_WEAPON_CLASS( weapon_displacer_pistol, DisplacerPistol, C_BaseHLCombatWeapon );
+#endif
 STUB_WEAPON_CLASS( weapon_crowbar, WeaponCrowbar, C_BaseHLBludgeonWeapon );
 #ifdef HL2_EPISODIC
 STUB_WEAPON_CLASS( weapon_hopwire, WeaponHopwire, C_BaseHLCombatWeapon );
