@@ -1265,6 +1265,7 @@ DLL_EXPORT int LauncherMain( int argc, char **argv )
 	CommandLine()->CreateCmdLine( IsPC() ? VCRHook_GetCommandLine() : lpCmdLine );
 #else
 	CommandLine()->CreateCmdLine( argc, argv );
+	Msg( "EZDIAG: cmdline = %s\n", CommandLine()->GetCmdLine() );
 #endif
 
 	// No -dxlevel or +mat_hdr_level allowed on POSIX
@@ -1284,6 +1285,7 @@ DLL_EXPORT int LauncherMain( int argc, char **argv )
 	
 	// Figure out the directory the executable is running from
 	UTIL_ComputeBaseDir();
+	Msg( "EZDIAG: base dir = %s\n", GetBaseDirectory() );
 
 	// Allow the user to explicitly say they want to be able to run multiple instances of the source mutex.
 	// Useful for side-by-side comparisons of different renderers.
@@ -1480,6 +1482,7 @@ DLL_EXPORT int LauncherMain( int argc, char **argv )
 	// and make that be the current working directory
 
 	_chdir( GetBaseDirectory() );
+	Msg( "EZDIAG: chdir to %s ok\n", GetBaseDirectory() );
 
 	g_LeakDump.m_bCheckLeaks = CommandLine()->CheckParm( "-leakcheck" ) ? true : false;
 
@@ -1490,7 +1493,10 @@ DLL_EXPORT int LauncherMain( int argc, char **argv )
 
 		CSourceAppSystemGroup sourceSystems;
 		CSteamApplication steamApplication( &sourceSystems );
+		Msg( "EZDIAG: entering CSteamApplication::Run\n" );
 		int nRetval = steamApplication.Run();
+		Msg( "EZDIAG: CSteamApplication::Run returned %d, errorStage=%d\n",
+				nRetval, (int)steamApplication.GetErrorStage() );
 		if ( steamApplication.GetErrorStage() == CSourceAppSystemGroup::INITIALIZATION )
 		{
 			bRestart = (nRetval == INIT_RESTART);
