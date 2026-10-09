@@ -32,6 +32,8 @@ GNU General Public License for more details.
 
 #include <android/log.h>
 #include <android/native_activity.h>
+#include <android/looper.h>
+#include <android/input.h>
 
 #include <jni.h>
 #include <pthread.h>
@@ -98,6 +100,17 @@ struct EzVrApp
         // Views as last located (for EZQuestVrHeadViews).
         XrView views[2];
         bool viewsValid;
+
+        // Android input queue drain (ANR guard). The framework delivers
+        // headset/controller key events to the activity's input queue on the
+        // main thread; nothing here interprets them (OpenXR carries
+        // controller input separately), but an undrained queue trips "Input
+        // dispatching timed out" and the system raises a real ANR dialog over
+        // the immersive session. Main thread publishes/retracts inputQueue;
+        // the XR worker owns the looper and drains it every frame.
+        AInputQueue *volatile inputQueue;
+        bool inputAttached;
+        ALooper *inputLooper;
 
         // Function pointers resolved from the instance.
         PFN_xrGetOpenGLESGraphicsRequirementsKHR pfnGetGlRequirements;
@@ -612,6 +625,59 @@ static void EzPollEvents( void )
 }
 
 // ---------------------------------------------------------------------------
+// Input-queue drain (runs on the XR worker, every frame)
+// ---------------------------------------------------------------------------
+
+#define EZ_INPUT_LOOPER_ID 1
+
+static void EzDrainInput( void )
+{
+        AInputQueue *queue = g_app.inputQueue;
+        if ( queue && !g_app.inputAttached )
+        {
+                if ( !g_app.inputLooper )
+                {
+                        g_app.inputLooper = ALooper_prepare( ALOOPER_PREPARE_ALLOW_NON_CALLBACKS );
+                }
+                if ( g_app.inputLooper )
+                {
+                        AInputQueue_attachLooper( queue, g_app.inputLooper,
+                                        EZ_INPUT_LOOPER_ID, NULL, NULL );
+                        g_app.inputAttached = true;
+                        EZLOG( "input queue attached (ANR drain)" );
+                }
+        }
+        if ( !g_app.inputAttached || !queue )
+        {
+                return;
+        }
+
+        // Drain without consuming: preDispatch lets the system take its keys
+        // (volume etc.); finishEvent(0) acknowledges the rest so dispatch
+        // never times out. No per-event logging here -- controllers chatter.
+        static bool inputSeen = false;
+        int ident, events;
+        void *data = NULL;
+        while ( ALooper_pollOnce( 0, NULL, &events, &data ) == EZ_INPUT_LOOPER_ID )
+        {
+                AInputEvent *event = NULL;
+                while ( AInputQueue_getEvent( queue, &event ) >= 0 )
+                {
+                        if ( AInputQueue_preDispatchEvent( queue, event ) )
+                        {
+                                // System took it; fall through to finish.
+                        }
+                        else if ( !inputSeen )
+                        {
+                                inputSeen = true;
+                                EZLOG( "first input event drained (type=%d)", AInputEvent_getType( event ) );
+                        }
+                        AInputQueue_finishEvent( queue, event, 0 );
+                }
+        }
+}
+
+// ---------------------------------------------------------------------------
 // Frame loop
 // ---------------------------------------------------------------------------
 
@@ -637,6 +703,29 @@ static bool EzRenderFrame( const XrFrameState &frameState )
         EZ_XR( xrLocateViews( g_app.session, &locateInfo, &viewState, 2, &locatedCount, g_app.views ),
                         "xrLocateViews" );
         g_app.viewsValid = ( locatedCount == 2 );
+        // One-time locate diagnostics: distinguishes "tracking dead / identity
+        // poses" (camera sits inside the ground plane -> blank clear color)
+        // from corrupt matrices. Added 2026-10-09 during the blank-scene hunt.
+        // Extended same day: the vDist visualization then showed fog == 1
+        // everywhere (camera 45 m+ from all ground), so dump the orientation
+        // and the derived view matrix too -- a NaN quaternion would explain
+        // a dropped quad with a live session.
+        {
+                static bool locateLogged = false;
+                if ( !locateLogged )
+                {
+                        locateLogged = true;
+                        EZLOG( "locate: count=%u flags=0x%x pos=(%.3f,%.3f,%.3f) fov=(%.3f,%.3f,%.3f,%.3f)",
+                                        (unsigned )locatedCount, (unsigned )viewState.viewStateFlags,
+                                        g_app.views[0].pose.position.x, g_app.views[0].pose.position.y,
+                                        g_app.views[0].pose.position.z,
+                                        g_app.views[0].fov.angleLeft, g_app.views[0].fov.angleRight,
+                                        g_app.views[0].fov.angleUp, g_app.views[0].fov.angleDown );
+                        const XrQuaternionf &q = g_app.views[0].pose.orientation;
+                        EZLOG( "locate: quat=(%.4f,%.4f,%.4f,%.4f)",
+                                        q.x, q.y, q.z, q.w );
+                }
+        }
 
         // Build per-eye targets.
         EzVrEyeFrame eyes[2];
@@ -846,6 +935,10 @@ static void EzVrRun( JNIEnv *env )
                 if ( !g_app.running )
                         break;
 
+                // Drain Android input every frame, session or not: an
+                // undrained queue ANRs the whole immersive app.
+                EzDrainInput();
+
                 if ( !g_app.sessionBegun )
                 {
                         // READY has not arrived yet, so there is no running
@@ -998,6 +1091,31 @@ static void EzOnActivityResume( ANativeActivity * ) { }
 static void EzOnActivityPause( ANativeActivity * ) { }
 static void EzOnActivityStop( ANativeActivity * ) { }
 
+static void EzOnInputQueueCreated( ANativeActivity *activity, AInputQueue *queue )
+{
+        EzVrApp *app = (EzVrApp * )activity->instance;
+        if ( app )
+        {
+                app->inputQueue = queue;
+        }
+}
+
+static void EzOnInputQueueDestroyed( ANativeActivity *activity, AInputQueue *queue )
+{
+        EzVrApp *app = (EzVrApp * )activity->instance;
+        // Inside the destroy callback the queue pointer is still valid, so
+        // detach here; the worker never touches a queue past this point.
+        AInputQueue_detachLooper( queue );
+        if ( app )
+        {
+                if ( app->inputQueue == queue )
+                {
+                        app->inputQueue = NULL;
+                }
+                app->inputAttached = false;
+        }
+}
+
 static void EzOnActivityDestroy( ANativeActivity *activity )
 {
         EzVrApp *app = (EzVrApp * )activity->instance;
@@ -1069,6 +1187,8 @@ ANativeActivity_onCreate( ANativeActivity *activity, void *, size_t )
         activity->callbacks->onPause = EzOnActivityPause;
         activity->callbacks->onStop = EzOnActivityStop;
         activity->callbacks->onDestroy = EzOnActivityDestroy;
+        activity->callbacks->onInputQueueCreated = EzOnInputQueueCreated;
+        activity->callbacks->onInputQueueDestroyed = EzOnInputQueueDestroyed;
 
         EZLOG( "ANativeActivity_onCreate: starting XR worker (EZQuest slice D)" );
         if ( pthread_create( &g_app.thread, NULL, EzVrThreadMain, NULL ) == 0 )
