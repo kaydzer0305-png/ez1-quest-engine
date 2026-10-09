@@ -518,3 +518,7 @@ BEGIN_VS_SHADER( VertexLitGeneric, "Help for VertexLitGeneric" )
 		}
 	}
 END_SHADER
+
+// Mapbase alias: see the note in lightmappedgeneric_dx9.cpp.
+BEGIN_INHERITED_SHADER( SDK_VertexLitGeneric, VertexLitGeneric, "Mapbase alias for VertexLitGeneric" )
+END_INHERITED_SHADER

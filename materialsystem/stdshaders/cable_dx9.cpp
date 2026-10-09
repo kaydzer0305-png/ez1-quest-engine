@@ -139,3 +139,7 @@ BEGIN_VS_SHADER( Cable_DX9,
 		Draw();
 	}
 END_SHADER
+// Mapbase alias: see the note in lightmappedgeneric_dx9.cpp.
+BEGIN_INHERITED_SHADER( SDK_Cable, Cable_DX9, "Mapbase alias for Cable_DX9" )
+END_INHERITED_SHADER
+

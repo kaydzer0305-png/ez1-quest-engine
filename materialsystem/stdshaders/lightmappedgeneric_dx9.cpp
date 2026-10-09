@@ -162,3 +162,10 @@ END_SHADER_PARAMS
 		DrawLightmappedGeneric_DX9( this, params, pShaderAPI, pShaderShadow, s_info, pContextDataPtr );
 	}
 END_SHADER
+
+// Mapbase alias: EZ2 materials name SDK_LightmappedGeneric, Mapbase's extended
+// variant of this shader. Render them with the stock implementation; the
+// Mapbase-only parameters are ignored with a warning instead of the whole
+// material falling back to the magenta checker.
+BEGIN_INHERITED_SHADER( SDK_LightmappedGeneric, LightmappedGeneric, "Mapbase alias for LightmappedGeneric" )
+END_INHERITED_SHADER
