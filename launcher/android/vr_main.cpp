@@ -870,6 +870,18 @@ static void EzVrRun( JNIEnv *env )
                 }
         }
 
+        // Reassert the XR context on THIS thread before anything creates GL
+        // objects: xrCreateSession (and friends) are free to disturb the
+        // binding, and every init below assumes currentness without checking.
+        // A silent uncurrent init reserves names but allocates nothing — the
+        // failure mode this line exists to rule out (2026-10-11: present
+        // targets with no attachments, black submits, no errors).
+        if ( !eglMakeCurrent( g_app.egl.display, g_app.egl.pbuffer,
+                              g_app.egl.pbuffer, g_app.egl.context ) )
+        {
+                EZLOG( "pre-present makeCurrent failed (0x%x); present-target creation may be hollow",
+                       eglGetError() );
+        }
         EZQuestVrPresentInit( g_app.swapchainWidth, g_app.swapchainHeight );
 
         // Wrap swapchain images in FBOs and build the diagnostic scene.
