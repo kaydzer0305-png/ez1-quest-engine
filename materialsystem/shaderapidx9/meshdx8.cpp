@@ -38,6 +38,7 @@
 #include "materialsystem/ivballoctracker.h"
 #include "tier1/strtools.h"
 #include "convar.h"
+#include <stdlib.h>
 #include "shaderdevicedx8.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
@@ -49,6 +50,10 @@
 //#define DEBUG_BUFFERED_MESHES 1
 
 #define MAX_DX8_STREAMS 16
+
+// Forward: defined with the mesh manager below; needed by the CMeshDX8::Lock
+// failure diagnostic much earlier in the file.
+static int VrDynamicIndexCount();
 
 #define VERTEX_FORMAT_INVALID	0xFFFFFFFFFFFFFFFFull
 
@@ -2692,6 +2697,15 @@ int CMeshDX8::Lock( bool bReadOnly, int nFirstIndex, int nIndexCount, IndexDesc_
 		desc.m_pIndices = g_nScratchIndexBuffer;
 		desc.m_nIndexSize = 0;
 
+		// Diagnostic: name the failure (device-proven 2026-10-11: this fired
+		// on the VR path with no preceding creation warning). reqTooBig=1
+		// means one mesh asked for more than the entire (possibly VR-doubled)
+		// dynamic pool; 0 means the pool/object itself is broken (pressure or
+		// post-construction release).
+		Msg( "CMeshDX8::LockIndexBuffer failed: req=%d first=%d readonly=%d reqTooBig=%d\n",
+			nIndexCount, nFirstIndex, (int)bReadOnly,
+			(int)( nIndexCount > VrDynamicIndexCount() ) );
+
 		// Check if paged pool is in critical state ( < 5% free )
 		PAGED_POOL_INFO_t ppi;
 		if ( ( SYSCALL_SUCCESS == Plat_GetPagedPoolInfo( &ppi ) ) &&
@@ -4844,6 +4858,23 @@ void CBufferedMeshDX8::Flush( )
 //
 //-----------------------------------------------------------------------------
 
+// Dynamic index-pool size, VR-aware. Stereo renders every frame twice (once
+// per eye) while map-load precache locks the same ring concurrently; the
+// stock 32K pool demonstrably exhausts on Quest during signon spawn
+// (device-proven 2026-10-11: a 57-index lock failed on the VR path while the
+// same map loads on flat). Doubled only when the launcher explicitly opts in
+// (EZQUEST_VR_ENABLE=1); every other profile keeps the stock size bit-for-bit
+// (opt-IN here, unlike the stereo path's opt-out — pool sizing must never
+// change unless asked). Keep in step with the twin in
+// materialsystem/cmatqueuedrendercontext.h.
+static int VrDynamicIndexCount()
+{
+	const char *v = getenv( "EZQUEST_VR_ENABLE" );
+	if ( v && strcmp( v, "1" ) == 0 )
+		return INDEX_BUFFER_SIZE * 2;
+	return INDEX_BUFFER_SIZE;
+}
+
 //-----------------------------------------------------------------------------
 // Constructor, destructor
 //-----------------------------------------------------------------------------
@@ -4854,7 +4885,7 @@ CMeshMgr::CMeshMgr() :
 	m_pCurrentVertexBuffer( NULL ),
 	m_CurrentVertexFormat( 0 ),
 	m_pCurrentIndexBuffer( NULL ),
-	m_DynamicIndexBuffer( SHADER_BUFFER_TYPE_DYNAMIC, MATERIAL_INDEX_FORMAT_16BIT, INDEX_BUFFER_SIZE, "dynamic" ),
+	m_DynamicIndexBuffer( SHADER_BUFFER_TYPE_DYNAMIC, MATERIAL_INDEX_FORMAT_16BIT, VrDynamicIndexCount(), "dynamic" ),
 	m_DynamicVertexBuffer( SHADER_BUFFER_TYPE_DYNAMIC, VERTEX_FORMAT_UNKNOWN, DYNAMIC_VERTEX_BUFFER_MEMORY, "dynamic" )
 {
 	m_bUseFatVertices = false;
@@ -4960,7 +4991,7 @@ void CMeshMgr::FillVertexIDBuffer( CVertexBuffer *pVertexIDBuffer, int nCount )
 void CMeshMgr::CreateDynamicIndexBuffer()
 {
 	DestroyDynamicIndexBuffer();
-	SafeAssign( &m_pDynamicIndexBuffer, new CIndexBuffer( Dx9Device(), INDEX_BUFFER_SIZE, ShaderAPI()->UsingSoftwareVertexProcessing(), true ) );
+	SafeAssign( &m_pDynamicIndexBuffer, new CIndexBuffer( Dx9Device(), VrDynamicIndexCount(), ShaderAPI()->UsingSoftwareVertexProcessing(), true ) );
 }
 
 void CMeshMgr::DestroyDynamicIndexBuffer()
@@ -5512,7 +5543,7 @@ int CMeshMgr::GetMaxVerticesToRender( IMaterial *pMaterial )
 
 int CMeshMgr::GetMaxIndicesToRender( )
 {
-	return INDEX_BUFFER_SIZE;
+	return VrDynamicIndexCount();
 }
 
 //-----------------------------------------------------------------------------

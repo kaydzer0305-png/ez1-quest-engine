@@ -429,7 +429,19 @@ void Sys_Error_Internal( bool bMinidump, const char *error, va_list argsList )
 #ifdef _WIN32
 		::MessageBox( NULL, text, "Engine Error", MB_OK | MB_TOPMOST );
 #elif defined( USE_SDL )
-		Sys_MessageBox( "Engine Error", text, false );
+		// No message box under the XR NativeActivity: SDL_ShowMessageBox
+		// reaches Android_JNI_ShowMessageBox, which calls into a NULL jclass
+		// (there is no SDLActivity behind NativeActivity) and ART aborts the
+		// whole :engine process — including the healthy XR loop — with
+		// SIGABRT. The error is already in the log above with a backtrace, so
+		// skip the dialog and take the normal error exit instead. The
+		// launcher exports EZQUEST_VR_NO_MSGBOX=1 on the VR path (0 on flat,
+		// where SDL owns a window and the dialog works).
+		{
+			const char *noBox = getenv( "EZQUEST_VR_NO_MSGBOX" );
+			if ( !( noBox && noBox[0] && !( noBox[0] == '0' && noBox[1] == '\0' ) ) )
+				Sys_MessageBox( "Engine Error", text, false );
+		}
 #endif
 	}
 

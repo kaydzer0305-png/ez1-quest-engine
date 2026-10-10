@@ -14,6 +14,9 @@
 #include "tier1/memstack.h"
 #include "mathlib/mathlib.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "tier0/memdbgon.h"
 
 #if defined( _WIN32 )
@@ -355,6 +358,11 @@ public:
 	virtual int GetMaxVerticesToRender( IMaterial *pMaterial );
 	virtual int GetMaxIndicesToRender( )
 	{
+		// Twin of VrDynamicIndexCount() in shaderapidx9/meshdx8.cpp (this TU
+		// can't share it without a new header; keep the two in step).
+		const char *vrIb = getenv( "EZQUEST_VR_ENABLE" );
+		if ( vrIb && strcmp( vrIb, "1" ) == 0 )
+			return INDEX_BUFFER_SIZE * 2;
 		return INDEX_BUFFER_SIZE;
 	}
 
