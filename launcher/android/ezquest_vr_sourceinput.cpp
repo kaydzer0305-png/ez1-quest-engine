@@ -4,10 +4,11 @@ Copyright (C) 2026 kaydzer0305-png
 Maps Quest Touch (EzVrInputState) onto Source movement/attack commands.
 Does not use HID/SDL joystick paths.
 
-EZ1 extras (plan Phase 3):
-  Left grip + right trigger  -> +alt1 (Bad Cop kick)
-  A/X held ~0.45s            -> impulse 100 (nightvision)
-  Left grip + right stick click -> slot5 (manhack toss weapon)
+Per-profile extras: SOURCEVR_GAME selects the arsenal layout. EZ1 keeps its
+plan-Phase-3 extras (Bad Cop kick on +alt1, nightvision on impulse 100, the
+manhack-toss weapon on slot5). EZ2 (EntropyZero2) has no manhack-toss weapon,
+so that chord is lastinv (previous weapon — the panic key) there instead;
+kick/nightvision are shared HL2-kit behavior and stay.
 */
 
 #if defined( ANDROID ) || defined( __ANDROID__ )
@@ -19,6 +20,7 @@ EZ1 extras (plan Phase 3):
 #include <dlfcn.h>
 #include <math.h>
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 
 #include "inputsystem/iinputsystem.h"
@@ -33,8 +35,18 @@ namespace {
 
 CbufAddTextFn g_cbuf = NULL;
 IInputSystem *g_input = NULL;
-int g_resolved = 0;
+// Separate latches: the XR thread starts resolving before the engine boot
+// worker has loaded anything, and a latch shared by both lookups would
+// permanently pin whichever one lost the race (2026-10-11: cbuf won,
+// IInputSystem stayed NULL forever and the turn axis was dead).
+int g_cbufResolved = 0;
+int g_inputResolved = 0;
 int g_logged = 0;
+// Failure diagnostics below run every XR frame until they resolve; throttle
+// to ~one line per 4s so a permanently-unresolvable symbol costs logcat spam
+// instead of a diagnosis.
+int g_resolveTick = 0;
+static int ResolveLogDue( void ) { return ( g_resolveTick % 300 ) == 0; }
 
 int g_fwd = 0, g_back = 0, g_ml = 0, g_mr = 0, g_speed = 0;
 int g_atk = 0, g_atk2 = 0, g_jump = 0, g_reload = 0, g_use = 0, g_menu = 0;
@@ -53,6 +65,44 @@ static int EnvTruthy( const char *name, int deflt )
         if ( v[0] == '0' && v[1] == '\0' )
                 return 0;
         return 1;
+}
+
+// True on the EZ2 profile (EntropyZero2, either casing): its arsenal has no
+// manhack-toss weapon, so profile-specific chords diverge here. Cached: the
+// game does not change under a running session.
+static int IsEZ2( void )
+{
+        static int cached = -1;
+        if ( cached < 0 )
+        {
+                const char *g = getenv( "SOURCEVR_GAME" );
+                cached = ( g && strcasecmp( g, "EntropyZero2" ) == 0 ) ? 1 : 0;
+        }
+        return cached;
+}
+
+static void *TrySymDiag( const char *name, const char *ctx )
+{
+        dlerror();
+        void *s = dlsym( RTLD_DEFAULT, name );
+        if ( s )
+                return s;
+        const char *e1 = dlerror();
+        void *eng = dlopen( "libengine.so", RTLD_NOW | RTLD_NOLOAD );
+        if ( !eng )
+                eng = dlopen( "libengine.so", RTLD_NOW );
+        if ( eng )
+        {
+                dlerror();
+                s = dlsym( eng, name );
+                if ( s )
+                        return s;
+        }
+        const char *e2 = dlerror();
+        if ( ResolveLogDue() )
+                EZLOG( "%s: %s unresolved (global: %s; engine-handle: %s)", ctx, name,
+                       e1 && e1[0] ? e1 : "?", e2 && e2[0] ? e2 : "?" );
+        return NULL;
 }
 
 static void *TrySym( const char *name )
@@ -74,43 +124,77 @@ static void *TrySym( const char *name )
 
 static void ResolveEngine( void )
 {
-        if ( g_resolved )
-                return;
-
-        static const char *kCbufNames[] = {
-                "EZQuest_Cbuf_AddText",
-                "Cbuf_AddText",
-                "_Z13Cbuf_AddTextPKc",
-                NULL
-        };
-        for ( int i = 0; kCbufNames[i]; i++ )
+        g_resolveTick++;
+        if ( !g_cbufResolved )
         {
-                g_cbuf = (CbufAddTextFn)TrySym( kCbufNames[i] );
-                if ( g_cbuf )
+                static const char *kCbufNames[] = {
+                        "EZQuest_Cbuf_AddText",
+                        "Cbuf_AddText",
+                        "_Z13Cbuf_AddTextPKc",
+                        NULL
+                };
+                for ( int i = 0; kCbufNames[i]; i++ )
                 {
-                        EZLOG( "resolved %s", kCbufNames[i] );
-                        break;
+                        g_cbuf = (CbufAddTextFn)TrySym( kCbufNames[i] );
+                        if ( g_cbuf )
+                        {
+                                EZLOG( "resolved %s", kCbufNames[i] );
+                                g_cbufResolved = 1;
+                                break;
+                        }
+                }
+                if ( !g_cbufResolved )
+                        TrySymDiag( "EZQuest_Cbuf_AddText", "cbuf" );
+        }
+
+        if ( !g_inputResolved )
+        {
+                // Prefer libinputsystem.so's OWN CreateInterface. A global-scope
+                // lookup returns the first match in load order — usually
+                // libengine.so's, which serves engine interfaces and answers
+                // INPUTSYSTEM_INTERFACE_VERSION with NULL (observed on device:
+                // "factory ok but ... returned NULL" every retry). Only fall
+                // back to the global lookup when the input lib is not loaded.
+                CreateInterfaceFn factory = NULL;
+                {
+                        dlerror();
+                        void *in = dlopen( "libinputsystem.so", RTLD_NOW | RTLD_NOLOAD );
+                        const char *eNoload = dlerror();
+                        if ( !in )
+                        {
+                                in = dlopen( "libinputsystem.so", RTLD_NOW );
+                                const char *eLoad = dlerror();
+                                if ( !in && ResolveLogDue() )
+                                        EZLOG( "input: dlopen libinputsystem.so failed (noload: %s; load: %s)",
+                                               eNoload && eNoload[0] ? eNoload : "?",
+                                               eLoad && eLoad[0] ? eLoad : "?" );
+                        }
+                        if ( in )
+                        {
+                                dlerror();
+                                factory = (CreateInterfaceFn)dlsym( in, "CreateInterface" );
+                                const char *eSym = dlerror();
+                                if ( !factory && ResolveLogDue() )
+                                        EZLOG( "input: dlsym CreateInterface failed: %s",
+                                               eSym && eSym[0] ? eSym : "?" );
+                        }
+                }
+                if ( !factory )
+                        factory = (CreateInterfaceFn)TrySym( "CreateInterface" );
+                if ( factory )
+                {
+                        g_input = (IInputSystem *)factory( INPUTSYSTEM_INTERFACE_VERSION, NULL );
+                        if ( g_input )
+                        {
+                                EZLOG( "resolved IInputSystem" );
+                                g_inputResolved = 1;
+                        }
+                        else if ( ResolveLogDue() )
+                        {
+                                EZLOG( "input: factory ok but INPUTSYSTEM_INTERFACE_VERSION returned NULL" );
+                        }
                 }
         }
-
-        CreateInterfaceFn factory = (CreateInterfaceFn)TrySym( "CreateInterface" );
-        if ( !factory )
-        {
-                void *in = dlopen( "libinputsystem.so", RTLD_NOW | RTLD_NOLOAD );
-                if ( !in )
-                        in = dlopen( "libinputsystem.so", RTLD_NOW );
-                if ( in )
-                        factory = (CreateInterfaceFn)dlsym( in, "CreateInterface" );
-        }
-        if ( factory )
-        {
-                g_input = (IInputSystem *)factory( INPUTSYSTEM_INTERFACE_VERSION, NULL );
-                if ( g_input )
-                        EZLOG( "resolved IInputSystem" );
-        }
-
-        if ( g_cbuf || g_input )
-                g_resolved = 1;
 }
 
 static void SendCmd( const char *cmd )
@@ -184,7 +268,10 @@ void EZQuestVrSourceInputSync( void )
 
         if ( ( L.gripClick || L.grip > 0.7f ) && R.stickClick && !g_manhack )
         {
-                SendCmd( "slot5\n" );
+                // EZ1: the manhack-toss weapon lives on slot5. EZ2 has no such
+                // weapon; lastinv (previous weapon) is the always-valid panic
+                // key instead.
+                SendCmd( IsEZ2() ? "lastinv\n" : "slot5\n" );
                 g_manhack = 1;
         }
         else if ( !R.stickClick )
@@ -258,7 +345,8 @@ void EZQuestVrSourceInputSync( void )
         if ( !g_logged )
         {
                 g_logged = 1;
-                EZLOG( "source mapping live (cbuf=%d inputsys=%d ez1-kick/nv/manhack)", g_cbuf ? 1 : 0, g_input ? 1 : 0 );
+                EZLOG( "source mapping live (cbuf=%d inputsys=%d %s)", g_cbuf ? 1 : 0, g_input ? 1 : 0,
+                       IsEZ2() ? "ez2-kick/nv/lastinv" : "ez1-kick/nv/manhack" );
         }
 }
 
