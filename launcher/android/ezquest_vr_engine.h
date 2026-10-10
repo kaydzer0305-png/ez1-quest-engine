@@ -27,10 +27,13 @@ GNU General Public License for more details.
  *                              requested, otherwise off so the grid remains
  *                              the baseline).
  *   EZQUEST_VR_TRY_ENGINE=1  — after the first presented frame, spawn a
- *                              worker that calls LauncherMainAndroid().
- *                              This currently demonstrates the boot path
- *                              only; the real togles → external-FBO work
- *                              still lives in the private tree.
+ *                              worker that calls LauncherMainAndroid() on the
+ *                              XR share-group context (CSDLMgr bypasses SDL
+ *                              video when EZQUEST_VR_EXTERNAL_GL=1, which the
+ *                              launcher exports alongside this knob). The
+ *                              engine's per-eye Source RTs then submit through
+ *                              DoDistortionProcessing; anything else presents
+ *                              as mono via the ShowPixels submit hook.
  *
  * See docs/vr-integration.md § "Engine render path scaffolding".
  */

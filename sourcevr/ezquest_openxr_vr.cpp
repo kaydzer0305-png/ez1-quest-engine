@@ -59,7 +59,12 @@ static int VrEnabledByEnv()
 
 struct XrQuaternionf { float x, y, z, w; };
 struct XrVector3f { float x, y, z; };
-struct XrPosef { XrQuaternionf orientation; XrVector3f position; };
+// Field order matches openxr's XrPose (position, then orientation). A local
+// struct with orientation-first compiles to the same SIZE but swaps the two,
+// so views[].pose.position would read orientation bytes (a cm-scale mid-eye
+// error in GetMidEyeFromEye). The memcpy'd view/proj matrices and the
+// midPos/midQuat arrays are layout-independent and were always fine.
+struct XrPosef { XrVector3f position; XrQuaternionf orientation; };
 struct XrFovf { float angleLeft, angleRight, angleUp, angleDown; };
 struct XrView { int type; const void *next; XrPosef pose; XrFovf fov; };
 

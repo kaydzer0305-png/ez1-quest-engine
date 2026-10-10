@@ -262,10 +262,12 @@ void EZQuestVrStubRenderHook( void * /*userdata*/,
 static void *EngineBootThread( void * )
 {
         EZLOG( "engine boot worker started (LauncherMainAndroid)" );
-        EZWAR( "NOTE: full togles → external-FBO path is not in this public "
-               "tree yet. LauncherMain will try to own its own GL surface "
-               "(SDL) and will likely conflict with the XR EGL context. "
-               "This path is scaffolding for the private-tree integration." );
+        EZWAR( "experimental: engine renders through the XR share-group "
+               "context (EZQuestVrBindEngineContext) with SDL video bypassed "
+               "(EZQUEST_VR_EXTERNAL_GL=1). Per-eye Source RTs submit via "
+               "DoDistortionProcessing; anything else lands as mono through "
+               "ShowPixels. Watch for GL-state stomps between the XR loop and "
+               "the engine thread." );
 
         // Minimal argv: binary name only. Real args come from SetLauncherArgs
         // inside LauncherMainAndroid (env / java_args).
@@ -281,16 +283,17 @@ void EZQuestVrOnFirstPresent( void )
                 return;
         g_bootRequested = 1;
 
-        // Opt-in only. The default used to boot the full engine, but
-        // LauncherMainAndroid always SDL-inits video, which cannot succeed
-        // under this bare NativeActivity: SDL_Init fails ("didn't initialize
-        // properly") and a later JNI CallStaticObjectMethod with a NULL
-        // jclass aborts the whole :engine process (SIGABRT, 2026-10-09),
-        // taking the healthy XR loop down with it. Real
-        // engine-through-the-seam rendering needs the toggles external-FBO
-        // path, which is not in this tree yet -- so trying is never useful
-        // until that lands. Set EZQUEST_VR_TRY_ENGINE=1 explicitly to re-arm
-        // this scaffolding for integration experiments.
+        // Opt-in only. LauncherMainAndroid used to SDL-init video
+        // unconditionally, which cannot succeed under this bare NativeActivity
+        // (no SDLActivity behind it): SDL_Init failed and a later JNI
+        // CallStaticObjectMethod with a NULL jclass aborted the whole :engine
+        // process (SIGABRT, 2026-10-09), taking the healthy XR loop down with
+        // it. CSDLMgr now bypasses SDL video when EZQUEST_VR_EXTERNAL_GL=1
+        // (set by the launcher alongside this knob) and binds the XR
+        // share-group context instead — but this joint path has not yet run a
+        // full game boot, so trying stays behind this explicit re-arm until it
+        // proves itself on device. Set EZQUEST_VR_TRY_ENGINE=1 to run the
+        // engine through the seam.
         const int wantEngine = getenv( "EZQUEST_VR_TRY_ENGINE" ) &&
                                EnvTruthy( "EZQUEST_VR_TRY_ENGINE" );
         const int wantStub = EnvTruthy( "EZQUEST_VR_STUB_HOOK" );

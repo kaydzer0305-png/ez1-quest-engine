@@ -27,8 +27,15 @@ struct EzVrTrackingSnapshot
         float midQuat[4];
 };
 
+// All three are resolved by name from the engine (sourcevr dlsyms
+// EZQuestVrCopyTracking out of liblauncher.so), so they need default
+// visibility: this tree builds -fvisibility=hidden, and a hidden symbol can
+// never resolve — the same bug class as the 2026-10-03 crashhandler fix.
+__attribute__( ( visibility( "default" ) ) )
 void EZQuestVrPublishEyes( const EzVrEyeFrame *eyes, int eyeCount, const XrView *views );
+__attribute__( ( visibility( "default" ) ) )
 int EZQuestVrCopyTracking( struct EzVrTrackingSnapshot *out );
+__attribute__( ( visibility( "default" ) ) )
 int EZQuestVrTrackingValid( void );
 
 #if defined( __cplusplus )

@@ -25,6 +25,7 @@ pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 EGLDisplay g_display = EGL_NO_DISPLAY;
 EGLConfig  g_config  = (EGLConfig)0;
 EGLSurface g_pbuffer = EGL_NO_SURFACE;
+EGLSurface g_engPbuffer = EGL_NO_SURFACE;
 EGLContext g_xrCtx   = EGL_NO_CONTEXT;
 EGLContext g_engCtx  = EGL_NO_CONTEXT;
 uint32_t g_w = 0;
@@ -207,6 +208,9 @@ void EZQuestVrPresentShutdown( void )
         if ( g_engCtx != EGL_NO_CONTEXT && g_display != EGL_NO_DISPLAY )
                 eglDestroyContext( g_display, g_engCtx );
         g_engCtx = EGL_NO_CONTEXT;
+        if ( g_engPbuffer != EGL_NO_SURFACE && g_display != EGL_NO_DISPLAY )
+                eglDestroySurface( g_display, g_engPbuffer );
+        g_engPbuffer = EGL_NO_SURFACE;
         if ( g_inited )
         {
                 for ( int e = 0; e < 2; e++ )
@@ -245,7 +249,27 @@ int EZQuestVrBindEngineContext( void )
                 }
                 EZLOG( "created engine share-group context" );
         }
-        EGLBoolean ok = eglMakeCurrent( g_display, g_pbuffer, g_pbuffer, g_engCtx );
+        // The engine runs on its own thread. The XR thread keeps g_pbuffer
+        // bound to the XR context, and one surface cannot be current on two
+        // contexts at once (that was EGL_BAD_ACCESS 0x3002 on device) — so the
+        // engine gets its own 1x1 pbuffer. It never presents to it; every
+        // present goes through the submit hooks as shared textures.
+        if ( g_engPbuffer == EGL_NO_SURFACE )
+        {
+                const EGLint pbAttribs[] = {
+                        EGL_WIDTH, 1,
+                        EGL_HEIGHT, 1,
+                        EGL_NONE
+                };
+                g_engPbuffer = eglCreatePbufferSurface( g_display, g_config, pbAttribs );
+                if ( g_engPbuffer == EGL_NO_SURFACE )
+                {
+                        EZERR( "engine pbuffer failed 0x%x", eglGetError() );
+                        pthread_mutex_unlock( &g_lock );
+                        return 0;
+                }
+        }
+        EGLBoolean ok = eglMakeCurrent( g_display, g_engPbuffer, g_engPbuffer, g_engCtx );
         pthread_mutex_unlock( &g_lock );
         if ( !ok )
         {
