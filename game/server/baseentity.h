@@ -120,12 +120,13 @@ enum Class_T
 	CLASS_EARTH_FAUNA,
 	CLASS_HACKED_ROLLERMINE,
 	CLASS_COMBINE_HUNTER,
-#ifdef EZ2
-	// Minimal mapbase backplane (TRANSPLANT-A §4.1). ez2_player.cpp tests
-	// targets for CLASS_COMBINE_HUSK. Upstream declares this inside its EZ
-	// block alongside six other EZ class values; only the husk one is needed
-	// for M2, and it must stay immediately before NUM_AI_CLASSES because both
-	// game DLLs number this enum from the same header.
+#if defined(EZ) || defined(EZ2)
+	CLASS_ALIEN_FAUNA,
+	CLASS_ALIEN_PREDATOR,
+	CLASS_ALIEN_FLORA,
+	CLASS_RACE_X,
+	CLASS_COMBINE_NEMESIS,
+	CLASS_ARBEIT_TECH,
 	CLASS_COMBINE_HUSK,
 #endif
 
@@ -1128,6 +1129,8 @@ public:
 
 	int		GetHealth() const		{ return m_iHealth; }
 	void	SetHealth( int amt )	{ m_iHealth = amt; }
+
+	virtual void	SetDisplacementImpossible( bool displacementImpossible ) {}
 
 	// Ugly code to lookup all functions to make sure they are in the table when set.
 #ifdef _DEBUG

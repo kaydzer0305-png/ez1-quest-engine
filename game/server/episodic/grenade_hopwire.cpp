@@ -31,32 +31,6 @@ ConVar g_debug_hopwire( "g_debug_hopwire", "0" );
 
 #define	MAX_HOP_HEIGHT		(hopwire_hopheight.GetFloat())		// Maximum amount the grenade will "hop" upwards when detonated
 
-class CGravityVortexController : public CBaseEntity
-{
-	DECLARE_CLASS( CGravityVortexController, CBaseEntity );
-	DECLARE_DATADESC();
-
-public:
-	
-			CGravityVortexController( void ) : m_flEndTime( 0.0f ), m_flRadius( 256 ), m_flStrength( 256 ), m_flMass( 0.0f ) {}	
-	float	GetConsumedMass( void ) const;
-
-	static CGravityVortexController *Create( const Vector &origin, float radius, float strength, float duration );
-
-private:
-
-	void	ConsumeEntity( CBaseEntity *pEnt );
-	void	PullPlayersInRange( void );
-	bool	KillNPCInRange( CBaseEntity *pVictim, IPhysicsObject **pPhysObj );
-	void	CreateDenseBall( void );
-	void	PullThink( void );
-	void	StartPull( const Vector &origin, float radius, float strength, float duration );
-
-	float	m_flMass;		// Mass consumed by the vortex
-	float	m_flEndTime;	// Time when the vortex will stop functioning
-	float	m_flRadius;		// Area of effect for the vortex
-	float	m_flStrength;	// Pulling strength of the vortex
-};
 
 //-----------------------------------------------------------------------------
 // Purpose: Returns the amount of mass consumed by the vortex
@@ -310,12 +284,17 @@ void CGravityVortexController::StartPull( const Vector &origin, float radius, fl
 //-----------------------------------------------------------------------------
 // Purpose: Creation utility
 //-----------------------------------------------------------------------------
-CGravityVortexController *CGravityVortexController::Create( const Vector &origin, float radius, float strength, float duration )
+CGravityVortexController *CGravityVortexController::Create( const Vector &origin, float radius, float strength, float duration, CBaseEntity *pGrenade )
 {
 	// Create an instance of the vortex
 	CGravityVortexController *pVortex = (CGravityVortexController *) CreateEntityByName( "vortex_controller" );
 	if ( pVortex == NULL )
 		return NULL;
+
+	if ( pGrenade )
+	{
+		pVortex->SetOwnerEntity( pGrenade );
+	}
 
 	// Start the vortex working
 	pVortex->StartPull( origin, radius, strength, duration );

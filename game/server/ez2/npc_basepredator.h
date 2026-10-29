@@ -36,6 +36,13 @@ enum PredatorVariant
 	EZ_VARIANT_RAD
 };
 
+#ifndef BLOOD_COLOR_BLUE
+#define BLOOD_COLOR_BLUE BLOOD_COLOR_GREEN
+#endif
+#ifndef BLOOD_COLOR_ZOMBIE
+#define BLOOD_COLOR_ZOMBIE BLOOD_COLOR_GREEN
+#endif
+
 //=========================================================
 // monster-specific tasks
 //=========================================================
@@ -123,7 +130,12 @@ public:
 
 	virtual float GetMaxSpitWaitTime( void ) { return 0.0f; };
 	virtual float GetMinSpitWaitTime( void ) { return 0.0f; };
+	virtual float GetProjectileDamge( void ) { return 0.0f; };
+	virtual float GetBiteDamage( void ) { return 0.0f; };
 	virtual float GetWhipDamage( void ) { return 0.0f; };
+	virtual float GetEatInCombatPercentHealth( void ) { return 1.0f; };
+	virtual bool ShouldImmediatelyAttackObstructions() { return false; }
+	virtual bool ShouldMeleeDamageAnyNPC() { return false; }
 	virtual float GetSprintDistance( void ) { return 256.0f; };
 
 	void Event_Killed(const CTakeDamageInfo &info);

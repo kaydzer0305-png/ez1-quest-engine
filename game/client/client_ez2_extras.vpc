@@ -27,6 +27,7 @@ $Project "Client (Entropy Zero 2)"
 		$File	"ez2\c_ez2_player.cpp"
 		$File	"ez2\c_weapon_oicw.cpp"
 		$File	"ez2\c_weapon_pulse_pistol.cpp"
+		$File	"ez2\c_npc_base_husk.cpp"
 	}
 
 	// M2: the sniper client — the APC's vehicle_weapon_sniperrifle pairs with

@@ -50,6 +50,7 @@ jobs:
           repository: ${{ inputs.launcher_repo }}
           ref: ${{ inputs.launcher_ref }}
           path: launcher
+          token: ${{ secrets.LAUNCHER_PAT || github.token }}
         if: ${{ inputs.launcher_repo != '' }}
 
       - name: Require a launcher checkout
