@@ -34,10 +34,10 @@
 class CNPC_Combine : public CAI_BaseActor
 {
 	DECLARE_DATADESC();
-	DEFINE_CUSTOM_AI;
 	DECLARE_CLASS( CNPC_Combine, CAI_BaseActor );
 
 public:
+	DEFINE_CUSTOM_AI;
 	CNPC_Combine();
 
 	// Create components

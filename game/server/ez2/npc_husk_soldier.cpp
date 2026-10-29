@@ -13,6 +13,7 @@
 #include "weapon_physcannon.h"
 #include "ai_playerally.h"
 #include "player_pickup.h"
+#include "npcevent.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
