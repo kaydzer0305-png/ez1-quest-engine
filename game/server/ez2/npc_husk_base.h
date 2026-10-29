@@ -90,6 +90,11 @@ extern ConVar sk_husk_common_infight_time;
 #define TLK_HUSK_SUSPICIOUS_TO_ANGRY "TLK_STARTLED"
 #define TLK_CMB_DIE "TLK_CMB_DIE"
 
+#define gm_isz_class_AR2 "weapon_ar2"
+#define gm_isz_class_Shotgun "weapon_shotgun"
+#define gm_isz_class_SMG1 "weapon_smg1"
+#define gm_isz_class_Pistol "weapon_pistol"
+
 //-----------------------------------------------------------------------------
 // Classes can cast to this and access some basic husk functions.
 //-----------------------------------------------------------------------------

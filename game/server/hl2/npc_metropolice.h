@@ -115,7 +115,7 @@ protected:
 	virtual bool OnBeginMoveAndShoot();
 	virtual void OnEndMoveAndShoot();
 
-private:
+protected:
 	bool		PlayerIsCriminal( void );
 	void		ReleaseManhack( void );
 

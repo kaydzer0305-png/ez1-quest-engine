@@ -743,6 +743,7 @@ private:
 	NPC_STATE			SelectAlertIdealState();
 	NPC_STATE			SelectScriptIdealState();
 
+protected:
 	// Various schedule selections based on NPC_STATE
 	int					SelectIdleSchedule();
 	int					SelectAlertSchedule();
