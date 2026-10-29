@@ -2114,6 +2114,8 @@ typedef enum
 	ACT_CHARGE_PULSE_PISTOL_LOW,
 	ACT_GESTURE_RELOAD_PULSE_PISTOL,
 	ACT_GESTURE_CHARGE_PULSE_PISTOL,
+	ACT_COMBINE_AR2_ALTFIRE,
+	ACT_GESTURE_COMBINE_AR2_ALTFIRE,
 #endif
 
 	// this is the end of the global activities, private per-monster activities start here.
