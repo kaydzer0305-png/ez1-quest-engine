@@ -451,6 +451,7 @@ protected:
 	// context. 
 	inline bool IsGameEndAlly( void ) { return m_bGameEndAlly; }
 
+public:
 	//-----------------------------------------------------
 	// Conditions, Schedules, Tasks
 	//-----------------------------------------------------
