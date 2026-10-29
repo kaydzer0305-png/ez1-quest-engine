@@ -122,6 +122,7 @@ private:
 	HuskSoldierType_t	m_tHuskSoldierType;
 
 	bool			m_bNoDynamicDamage;
+	int				m_iCanPlayerGive = 0;
 
 	COutputEvent	m_OnGiftAccept;
 	COutputEvent	m_OnGiftReject;

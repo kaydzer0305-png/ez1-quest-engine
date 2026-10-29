@@ -88,6 +88,7 @@ extern ConVar sk_husk_common_infight_time;
 
 #define TLK_HUSK_SUSPICIOUS "TLK_SUSPICIOUS"
 #define TLK_HUSK_SUSPICIOUS_TO_ANGRY "TLK_STARTLED"
+#define TLK_CMB_DIE "TLK_CMB_DIE"
 
 //-----------------------------------------------------------------------------
 // Classes can cast to this and access some basic husk functions.
@@ -169,6 +170,20 @@ public:
 	virtual float	GetSuspiciousRadius() { return this->m_flSuspiciousRadius; }
 
 	virtual float	ShouldDelayEscalation() { return false; }
+
+	int			m_tEzVariant = EZ_VARIANT_DEFAULT;
+	int			GetEZVariant() const { return m_tEzVariant; }
+	void		SetEZVariant( int variant ) { m_tEzVariant = variant; }
+
+	virtual bool	SpeakIfAllowed( const char *concept, int priority = 0, int criteria = 0 ) { return false; }
+	virtual bool	SpeakIfAllowed( const char *concept, AI_CriteriaSet &set, int priority = 0, int criteria = 0 ) { return false; }
+
+	virtual bool	GetGameTextSpeechParams( hudtextparms_t &params ) { return false; }
+	virtual void	ModifyOrAppendDamageCriteria( AI_CriteriaSet &set, const CTakeDamageInfo &info ) {}
+
+	virtual bool	IsCommandable() { return false; }
+	virtual bool	IsGiveableItem( CBaseEntity *pItem ) { return false; }
+	virtual void	RemoveFromPlayerSquad() {}
 
 	//-----------------------------------------------------------------------------
 

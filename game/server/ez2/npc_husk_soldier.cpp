@@ -10,6 +10,9 @@
 #include "npc_husk_soldier.h"
 #include "ammodef.h"
 #include "IEffects.h"
+#include "weapon_physcannon.h"
+#include "ai_playerally.h"
+#include "player_pickup.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
