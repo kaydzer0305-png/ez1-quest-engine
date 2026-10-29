@@ -72,6 +72,7 @@ public:
 	Ammo_t				m_AmmoType[MAX_AMMO_TYPES];
 
 	Ammo_t				*GetAmmoOfIndex(int nAmmoIndex);
+	const char			*Name(int nAmmoIndex) { Ammo_t *p = GetAmmoOfIndex(nAmmoIndex); return p ? p->pName : NULL; }
 	int					Index(const char *psz);
 	int					PlrDamage(int nAmmoIndex);
 	int					NPCDamage(int nAmmoIndex);

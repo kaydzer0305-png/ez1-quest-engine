@@ -12,6 +12,7 @@
 #include "IEffects.h"
 #include "weapon_physcannon.h"
 #include "ai_playerally.h"
+#define COND_TALKER_PLAYER_STARING CAI_PlayerAlly::COND_TALKER_PLAYER_STARING
 #include "player_pickup.h"
 #include "npcevent.h"
 

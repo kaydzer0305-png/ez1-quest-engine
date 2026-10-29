@@ -247,7 +247,7 @@ public:
 	bool			IsPlayerUseDisabled() { return false; };
 #endif
 
-private:
+protected:
 	// Select the combat schedule
 	int SelectCombatSchedule();
 
