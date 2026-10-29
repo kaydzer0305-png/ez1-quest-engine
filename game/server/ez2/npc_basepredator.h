@@ -136,6 +136,16 @@ public:
 	virtual float GetEatInCombatPercentHealth( void ) { return 1.0f; };
 	virtual bool ShouldImmediatelyAttackObstructions() { return false; }
 	virtual bool ShouldMeleeDamageAnyNPC() { return false; }
+	virtual const char * GetSoundscriptClassname() { return GetClassname(); }
+	virtual void AttackSound( void ) { EmitSound( UTIL_VarArgs( "%s.Attack1", GetSoundscriptClassname() ) ); }
+	virtual void BiteSound( void ) { EmitSound( UTIL_VarArgs( "%s.Bite", GetSoundscriptClassname() ) ); }
+	virtual void EatSound( void ) { EmitSound( UTIL_VarArgs( "%s.Eat", GetSoundscriptClassname() ) ); }
+	virtual bool ShouldApplyHitVelocityToTarget( CBaseEntity *pHurt ) const { return true; }
+	virtual void SetReadyToSpawn( bool bIsReadyToSpawn ) { m_bReadyToSpawn = bIsReadyToSpawn; }
+	virtual void SetNextSpawnTime( float flNextSpawnTime ) { m_flNextSpawnTime = flNextSpawnTime; }
+	virtual void SetHungryTime( float flHungryTime ) { m_flHungryTime = flHungryTime; }
+	virtual void SetTimesFed( int iTimesFed ) { m_iTimesFed = (float)iTimesFed; }
+	virtual float GetMass( void ) const { return (VPhysicsGetObject() != NULL) ? VPhysicsGetObject()->GetMass() : 100.0f; }
 	virtual float GetSprintDistance( void ) { return 256.0f; };
 
 	void Event_Killed(const CTakeDamageInfo &info);
