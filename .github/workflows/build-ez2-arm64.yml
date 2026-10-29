@@ -12,13 +12,13 @@ on:
   workflow_dispatch:
     inputs:
       build_games:
-        description: 'waf --build-games value. ez2 requires the M1 game-code port; ez1 is the proven default.'
+        description: 'waf --build-games value (defaults to ez2 with the M2 game-code port)'
         required: false
-        default: 'ez1'
+        default: 'ez2'
       launcher_repo:
-        description: 'Git repo holding the EZ2Launcher Gradle project (empty = not yet published)'
+        description: 'Git repo holding the EZ2Launcher Gradle project'
         required: false
-        default: ''
+        default: 'kaydzer0305-png/ez2vr'
       launcher_ref:
         description: 'Branch/tag/SHA of launcher_repo to build'
         required: false
