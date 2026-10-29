@@ -6598,6 +6598,18 @@ const char *CBaseEntity::GetContextValue( const char *contextName ) const
 
 	return m_ResponseContexts[ idx ].m_iszValue.ToCStr();
 }
+
+bool CBaseEntity::HasContext( const char *name, const char *value ) const
+{
+	int idx = FindContextByName( name );
+	if ( idx == -1 )
+		return false;
+
+	if ( value && Q_strcmp( m_ResponseContexts[ idx ].m_iszValue.ToCStr(), value ) != 0 )
+		return false;
+
+	return true;
+}
 #endif
 
 //-----------------------------------------------------------------------------

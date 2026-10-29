@@ -26,6 +26,7 @@
 #define SF_COMBINE_NO_LOOK	(1 << 16)
 #define SF_COMBINE_NO_GRENADEDROP ( 1 << 17 )
 #define SF_COMBINE_NO_AR2DROP ( 1 << 18 )
+#define SF_COMBINE_REGENERATE ( 1 << 19 )
 
 //=========================================================
 //	>> CNPC_Combine
@@ -33,10 +34,10 @@
 class CNPC_Combine : public CAI_BaseActor
 {
 	DECLARE_DATADESC();
-	DEFINE_CUSTOM_AI;
 	DECLARE_CLASS( CNPC_Combine, CAI_BaseActor );
 
 public:
+	DEFINE_CUSTOM_AI;
 	CNPC_Combine();
 
 	// Create components
@@ -153,7 +154,14 @@ protected:
 	void			SetKickDamage( int nDamage ) { m_nKickDamage = nDamage; }
 	CAI_Sentence< CNPC_Combine > *GetSentences() { return &m_Sentences; }
 
-private:
+	virtual void	BashSound() {}
+
+	int				m_iNumGrenades;
+#ifdef EZ2
+	bool			m_bDontPickupWeapons = false;
+	bool			m_bLookForItems = false;
+#endif
+
 	//=========================================================
 	// Combine S schedules
 	//=========================================================
@@ -239,7 +247,7 @@ public:
 	bool			IsPlayerUseDisabled() { return false; };
 #endif
 
-private:
+protected:
 	// Select the combat schedule
 	int SelectCombatSchedule();
 
@@ -287,8 +295,7 @@ private:
 	float			m_flStopMoveShootTime;
 
 	CAI_Sentence< CNPC_Combine > m_Sentences;
-
-	int			m_iNumGrenades;
+ 
 	CAI_AssaultBehavior			m_AssaultBehavior;
 	CCombineStandoffBehavior	m_StandoffBehavior;
 	CAI_FollowBehavior			m_FollowBehavior;

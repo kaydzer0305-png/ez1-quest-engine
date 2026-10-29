@@ -49,7 +49,32 @@ struct DisplacementInfo_t
 };
 #endif
 
-class CGravityVortexController;
+class CGravityVortexController : public CBaseEntity
+{
+	DECLARE_CLASS( CGravityVortexController, CBaseEntity );
+	DECLARE_DATADESC();
+
+public:
+	CGravityVortexController( void ) : m_flEndTime( 0.0f ), m_flRadius( 256 ), m_flStrength( 256 ), m_flMass( 0.0f ) {}
+	float	GetConsumedMass( void ) const;
+	void	SetConsumedMass( float flMass ) { m_flMass = flMass; }
+	void	SetConsumeRadius( float flRadius ) { m_flRadius = flRadius; }
+
+	static CGravityVortexController *Create( const Vector &origin, float radius, float strength, float duration, CBaseEntity *pGrenade = NULL );
+
+private:
+	void	ConsumeEntity( CBaseEntity *pEnt );
+	void	PullPlayersInRange( void );
+	bool	KillNPCInRange( CBaseEntity *pVictim, IPhysicsObject **pPhysObj );
+	void	CreateDenseBall( void );
+	void	PullThink( void );
+	void	StartPull( const Vector &origin, float radius, float strength, float duration );
+
+	float	m_flMass;		// Mass consumed by the vortex
+	float	m_flEndTime;	// Time when the vortex will stop functioning
+	float	m_flRadius;		// Area of effect for the vortex
+	float	m_flStrength;	// Pulling strength of the vortex
+};
 
 class CGrenadeHopwire : public CBaseGrenade
 {

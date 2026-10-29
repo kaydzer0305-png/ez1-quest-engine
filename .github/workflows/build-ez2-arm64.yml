@@ -50,6 +50,7 @@ jobs:
           repository: ${{ inputs.launcher_repo }}
           ref: ${{ inputs.launcher_ref }}
           path: launcher
+          token: ${{ secrets.LAUNCHER_PAT || github.token }}
         if: ${{ inputs.launcher_repo != '' }}
 
       - name: Require a launcher checkout
@@ -133,8 +134,17 @@ jobs:
           ASSETS="$GITHUB_WORKSPACE/$LAUNCHER_DIR/app/src/main/assets/ez2/native"
           mkdir -p "$JNI" "$ASSETS"
           cp $GITHUB_WORKSPACE/stage/libs/*.so "$JNI/"
-          cp $GITHUB_WORKSPACE/stage/load/*.load "$ASSETS/"
+          if compgen -G "$GITHUB_WORKSPACE/stage/load/*.load" > /dev/null; then
+            cp $GITHUB_WORKSPACE/stage/load/*.load "$ASSETS/"
+          fi
+          test -f "$ASSETS/ez2vr.load" || { echo "ez2vr.load missing in $ASSETS"; exit 1; }
           ls -la "$JNI" "$ASSETS"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Assemble launcher APK
         working-directory: launcher

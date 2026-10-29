@@ -32,4 +32,16 @@ enum HuskCognitionFlags_t
 	bits_HUSK_COGNITION_BROKEN_RADIO	= (1 << 5), // Can't communicate with squad members I can't see (could perhaps use a broken vocoder in responses)
 };
 
-#endif // NPC_HUSK_BASE_H
+enum EzVariant_t
+{
+	EZ_VARIANT_DEFAULT = 0,
+	EZ_VARIANT_XEN,
+	EZ_VARIANT_RAD,
+	EZ_VARIANT_TEMPORAL,
+	EZ_VARIANT_ARBEIT,
+	EZ_VARIANT_BLOODLION,
+	EZ_VARIANT_ATHENAEUM,
+	EZ_VARIANT_ASH,
+};
+
+#endif // NPC_HUSK_BASE_SHARED_H
