@@ -58,7 +58,7 @@ extern ConVar sk_husk_common_infight_time;
 	DEFINE_INPUTFUNC( FIELD_EHANDLE,	"RemoveHostileOverrideTarget",	InputRemoveHostileOverrideTarget ),	\
 	DEFINE_OUTPUT(m_OnAggressionCalm, "OnAggressionCalm"),	\
 	DEFINE_OUTPUT(m_OnAggressionSuspicious, "OnAggressionSuspicious"),	\
-	DEFINE_OUTPUT(m_OnAggressionAngry, "OnAggressionAngry"),	\
+	DEFINE_OUTPUT(m_OnAggressionAngry, "OnAggressionAngry")
 
 #ifndef MAPBASE_VSCRIPT
 #ifndef DECLARE_ENT_SCRIPTDESC
@@ -72,13 +72,13 @@ extern ConVar sk_husk_common_infight_time;
 #else
 #define	DEFINE_BASE_HUSK_SCRIPTDESC() \
 	DEFINE_SCRIPTFUNC_NAMED( ScriptGetHuskAggressionLevel, "GetHuskAggressionLevel", "Get the husk's aggression level." )	\
-	DEFINE_SCRIPTFUNC_NAMED( ScriptGetHuskCognitionFlags, "GetHuskCognitionFlags", "Get the husk's aggression flags." )	\
+	DEFINE_SCRIPTFUNC_NAMED( ScriptGetHuskCognitionFlags, "GetHuskCognitionFlags", "Get the husk's aggression flags." )
 #endif
 
 #define DEFINE_BASE_HUSK_SENDPROPS() \
 	SendPropInt( SENDINFO( m_nHuskAggressionLevel ) ),	\
 	SendPropInt( SENDINFO( m_nHuskCognitionFlags ) ),	\
-	SendPropBool( SENDINFO( m_bAlliedWithPlayer ) ),	\
+	SendPropBool( SENDINFO( m_bAlliedWithPlayer ) )
 
 //-----------------------------------------------------------------------------
 
