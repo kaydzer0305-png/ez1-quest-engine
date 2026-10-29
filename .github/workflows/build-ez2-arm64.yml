@@ -134,7 +134,10 @@ jobs:
           ASSETS="$GITHUB_WORKSPACE/$LAUNCHER_DIR/app/src/main/assets/ez2/native"
           mkdir -p "$JNI" "$ASSETS"
           cp $GITHUB_WORKSPACE/stage/libs/*.so "$JNI/"
-          cp $GITHUB_WORKSPACE/stage/load/*.load "$ASSETS/"
+          if compgen -G "$GITHUB_WORKSPACE/stage/load/*.load" > /dev/null; then
+            cp $GITHUB_WORKSPACE/stage/load/*.load "$ASSETS/"
+          fi
+          test -f "$ASSETS/ez2vr.load" || { echo "ez2vr.load missing in $ASSETS"; exit 1; }
           ls -la "$JNI" "$ASSETS"
 
       - name: Assemble launcher APK
