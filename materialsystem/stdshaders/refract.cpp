@@ -109,3 +109,7 @@ BEGIN_VS_SHADER( Refract_DX90, "Help for Refract" )
 		}
 	}
 END_SHADER
+// Mapbase alias: see the note in lightmappedgeneric_dx9.cpp.
+BEGIN_INHERITED_SHADER( SDK_Refract, Refract_DX90, "Mapbase alias for Refract_DX90" )
+END_INHERITED_SHADER
+

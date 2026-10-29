@@ -27,6 +27,9 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#if defined( ANDROID )
+#include <dlfcn.h>
+#endif
 #include "Color.h"
 #include "tier0/dbg.h"
 #include "tier0/threadtools.h"
@@ -318,6 +321,24 @@ SpewOutputFunc_t GetSpewOutputFunc( void )
 	return DefaultSpewFunc;
 }
 
+void DumpFatalBacktrace( const char *reason )
+{
+#if defined( ANDROID )
+	typedef void ( *DumpBacktraceFn )( const char * );
+	static DumpBacktraceFn s_pDumpBacktrace = NULL;
+	static bool s_bResolved = false;
+	if ( !s_bResolved )
+	{
+		s_bResolved = true;
+		s_pDumpBacktrace = (DumpBacktraceFn)dlsym( RTLD_DEFAULT, "EZQuestDumpBacktrace" );
+	}
+	if ( s_pDumpBacktrace )
+		s_pDumpBacktrace( reason );
+#else
+	(void)reason;
+#endif
+}
+
 void _ExitOnFatalAssert( const tchar* pFile, int line )
 {
 	_SpewMessage( _T("Fatal assert failed: %s, line %d.  Application exiting.\n"), pFile, line );
@@ -468,6 +489,10 @@ static SpewRetval_t _SpewMessage( SpewType_t spewType, const char *pGroupName, i
 		
 	case SPEW_ABORT:
 	{
+		// Last chance before the process dies. Error() routes here rather than
+		// through Sys_Error(), so hooking only Sys_Error_Internal misses every
+		// Error() fatal -- which is the common case.
+		DumpFatalBacktrace( pTempBuffer );
 //		MessageBox(NULL,"Error in _SpewMessage","Error",MB_OK);
 //		ConMsg( _T("Exiting on SPEW_ABORT\n") );
 		exit(1);

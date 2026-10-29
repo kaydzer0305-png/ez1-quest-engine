@@ -56,6 +56,8 @@ void SetLauncherArgs()
 	static char binPath[2048];
 	static char gamePath[2048];
 	static char launchArgsBuf[2048];
+	static char gameArgsBuf[4096];
+	static char *gameArgsPtrs[256];
 	const char *bindir = getenv("NATIVE_LIB_DIR");
 	if ( !bindir || !bindir[0] )
 		bindir = getenv("APP_DATA_PATH");
@@ -64,11 +66,77 @@ void SetLauncherArgs()
 
 	D("-nouserclip");
 
+	// EZ2VR: the VR host is a NativeActivity, so java_args is empty there and
+	// the command line rides along as EZ2_GAME_ARGS (see EZ2EngineEnv and
+	// native/ez2vr_argv_snippet.cpp in the launcher repo). Merge it FIRST —
+	// ahead of the -game fallback below — because it carries the absolute
+	// -game plus -mobile, +execs and menu convars, while the fallback can only
+	// synthesize -game. The flat path sets java_args via setArgs(), so this
+	// block never fires there and setArgs stays authoritative. Quoting is
+	// honored (the launcher refuses space-bearing paths, but menu values must
+	// not be able to break tokenization either); a malformed token stops the
+	// merge rather than injecting half an argv.
+	bool mergedGameArgs = false;
+	{
+		const char *envArgs = getenv( "EZ2_GAME_ARGS" );
+		if ( envArgs && envArgs[0] && java_args[0] == '\0' )
+		{
+			snprintf( gameArgsBuf, sizeof gameArgsBuf, "%s", envArgs );
+			int nPtrs = 0;
+			bool ok = true;
+			char *p = gameArgsBuf;
+			while ( *p && nPtrs + 1 < (int)( sizeof gameArgsPtrs / sizeof gameArgsPtrs[0] ) )
+			{
+				while ( *p == ' ' || *p == '\t' || *p == '\r' || *p == '\n' )
+					++p;
+				if ( !*p )
+					break;
+				// Token start. Quotes are stripped and the token is compacted
+				// in place (w never overtakes p, so the read is safe).
+				char *dst = p;
+				bool inQuote = false;
+				char *w = p;
+				while ( *p && ( inQuote || ( *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n' ) ) )
+				{
+					if ( *p == '"' )
+					{
+						inQuote = !inQuote;
+						++p;
+					}
+					else
+					{
+						*w++ = *p++;
+					}
+				}
+				if ( inQuote )
+				{
+					ok = false;
+					break;
+				}
+				if ( *p )
+					*p++ = '\0';
+				gameArgsPtrs[ nPtrs++ ] = dst;
+			}
+			if ( ok )
+			{
+				for ( int i = 0; i < nPtrs && iLastArgs + 1 < 510; ++i )
+					LauncherArgv[iLastArgs++] = gameArgsPtrs[i];
+				mergedGameArgs = true;
+				Msg( "SetLauncherArgs: merged %d EZ2_GAME_ARGS token(s)\n", nPtrs );
+			}
+			else
+			{
+				Msg( "SetLauncherArgs: EZ2_GAME_ARGS has an unterminated quote; ignoring it\n" );
+			}
+		}
+	}
+
 	// Flat path feeds "-game <abs>" via setArgs(); the VR NativeActivity
 	// path never calls setArgs, so java_args is empty there. Fall back to
 	// SOURCEVR_GAME + VALVE_GAME_PATH (SourceVR parity) so VR honors the
 	// manifest / dev-override profile instead of always booting hl2.
-	bool hasGame = ( strstr( java_args, "-game" ) != NULL );
+	// Skipped when the EZ2_GAME_ARGS merge above already carried -game.
+	bool hasGame = mergedGameArgs || ( strstr( java_args, "-game" ) != NULL );
 	if ( !hasGame )
 	{
 		const char *game = getenv( "SOURCEVR_GAME" );

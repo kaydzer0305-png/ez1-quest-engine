@@ -15,6 +15,8 @@ games = {
 	'hl2': ['client_base.vpc', 'client_hl2.vpc'],
 	# Extra EZ1 units (APC client, particles) sit in client_ez1_extras.vpc.
 	'ez1': ['client_base.vpc', 'client_hl2.vpc', 'client_ez1_extras.vpc'],
+	# EZ2 target profile. M1 ships wiring + the ez2vr client convars only.
+	'ez2': ['client_base.vpc', 'client_hl2.vpc', 'client_ez2_extras.vpc'],
 	'hl2mp': ['client_base.vpc', 'client_hl2mp.vpc'],
 	'hl1': ['client_base.vpc', 'client_hl1.vpc'],
 	'episodic': ['client_base.vpc', 'client_episodic.vpc'],
@@ -35,6 +37,11 @@ def configure(conf):
 
 	if game == 'ez1':
 		conf.env.append_unique('DEFINES', ['EZ=1', 'EZ1=1', 'HE_APC=1', 'GLOWS_ENABLE=1'])
+
+	# Must match EZ2's client_ez2.vpc $PreprocessorDefinitions.
+	if game == 'ez2':
+		conf.env.append_unique('DEFINES',
+			['EZ=1', 'EZ2=1', 'HE_APC=1', 'GLOWS_ENABLE=1', 'CSS_WEAPONS_IN_HL2=1'])
 def build(bld):
 	game = vpc_parser.parse_vpcs( bld.env, games[bld.env.GAMES], '../..' )
 
@@ -56,6 +63,19 @@ def build(bld):
 			'../server/ez1',
 			'../server/ez2',
 			'../server/mod',
+			'../server/Human_Error',
+		]
+
+	# M2: the EZ2 player/weapon client roster. The client reaches the server
+	# EZ2 headers (ez2_player.h, weapon_displacer_pistol.h) the same way the ez1
+	# profile does. The shared ez2vr/ez2 headers resolve through the
+	# $AdditionalIncludeDirectories in client_ez2_extras.vpc.
+	if bld.env.GAMES == 'ez2':
+		includes += [
+			'ez2',
+			'ez2vr',
+			'Human_Error',
+			'../server/ez2',
 			'../server/Human_Error',
 		]
 

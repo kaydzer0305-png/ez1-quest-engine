@@ -596,6 +596,30 @@ FSReturnCode_t FileSystem_LoadSearchPaths( CFSSearchPathsInit &initInfo )
 		}
 	}
 
+	// EZ2VR Quest layers (hl2vr / hl2bodyvr / hl2vr-style): the launcher stages
+	// its own overlay cfgs and VR-layer cfgs into the depot and exports them as
+	// a comma-separated VR_CONTENT_PATH. Mounted here, after the overlay, so a
+	// file staged in a VR layer wins over the same name in the overlay, and
+	// both win over nothing in the depot (gameinfo paths are added below and
+	// keep their usual precedence for retail files). Same shape as EXTRAS above;
+	// GAME only (not PLATFORM): layers carry game content, not platform dlls.
+	// Absent/unset (older launcher, desktop) means no paths, which is the
+	// pre-existing behavior bit-for-bit.
+	const char *VrContentPaths = getenv( "VR_CONTENT_PATH" );
+	if( VrContentPaths && VrContentPaths[0] )
+	{
+		CUtlStringList vecPaths;
+		V_SplitString( VrContentPaths, ",", vecPaths );
+
+		FOR_EACH_VEC( vecPaths, idxExtraPath )
+		{
+			Q_StripPrecedingAndTrailingWhitespace( vecPaths[ idxExtraPath ] );
+			if ( vecPaths[ idxExtraPath ][0] )
+				FileSystem_AddLoadedSearchPath( initInfo, "GAME", vecPaths[idxExtraPath], false );
+		}
+		Msg( "filesystem: mounted %d VR_CONTENT_PATH layer(s)\n", vecPaths.Count() );
+	}
+
 	bool bLowViolence = initInfo.m_bLowViolence;
 	for ( KeyValues *pCur=pSearchPaths->GetFirstValue(); pCur; pCur=pCur->GetNextValue() )
 	{

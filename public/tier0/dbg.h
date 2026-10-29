@@ -228,6 +228,22 @@ DBG_INTERFACE void SetAllAssertsDisabled( bool bAssertsEnabled );
 // Provides a callback that is called on asserts regardless of spew levels
 typedef void (*AssertFailedNotifyFunc_t)( const char *pchFile, int nLine, const char *pchMessage );
 DBG_INTERFACE void SetAssertFailedNotifyFunc( AssertFailedNotifyFunc_t func );
+
+/**
+ * Print a native backtrace for a fatal that is about to terminate the process.
+ *
+ * Exists because Error() is a clean exit, not a signal, so the engine's signal
+ * handler never sees it and a fatal used to leave nothing behind but its
+ * message. Several boot failures on this port were undiagnosable for that
+ * reason.
+ *
+ * The unwinder itself lives in launcher/android/crashhandler.cpp (it needs the
+ * libunwind and demangler copies that ship with the launcher), so this resolves
+ * it by name on first use rather than linking it. liblauncher.so is dlopen'd
+ * RTLD_GLOBAL before the .load graph pulls in libengine.so, so RTLD_DEFAULT
+ * finds it. If it does not, this is a no-op and the fatal path is unchanged.
+ */
+DBG_INTERFACE void DumpFatalBacktrace( const char *reason );
 DBG_INTERFACE void CallAssertFailedNotifyFunc( const char *pchFile, int nLine, const char *pchMessage );
 
 /* True if -hushasserts was passed on command line. */

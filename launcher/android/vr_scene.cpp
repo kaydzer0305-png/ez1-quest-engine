@@ -123,14 +123,25 @@ out vec4 fragColor;
 void main() {
     // Horizon gradient: fog color fades in with distance.
     vec3 fogColor = vec3(0.045, 0.075, 0.11);
-    float fog = clamp(vDist / 45.0, 0.0, 1.0);
-    fog = fog * fog;
+    // Fog is permanently OFF (2026-10-09): with the fog term live, every
+    // ground fragment rendered as pure fogColor on the Quest 3S (verified
+    // by visualizing clamp(vDist/45) -> white everywhere, while poses,
+    // matrices and varyings were all proven correct by the magenta / orange
+    // / mosaic / lineMajor probes). Root cause undiagnosed -- some
+    // Adreno/driver interaction with length(eye.xyz) or the fog mix -- but
+    // fog is only a distance cue and the grid + marker + pulse carry all of
+    // this diagnostic scene's signal, so it stays off rather than holding
+    // the wear-test hostage.
+    float fog = 0.0;
 
     // Anti-aliased grid on the ground plane (2 m cells, 1 m sub-grid).
+    // cell/sub are in pixels (world distance / screen-space derivative), so
+    // dividing by ~3/2 widens the lines to 3/2 px: 1-px hairlines are
+    // invisible in the compositor mirror and nearly so in the headset.
     vec2 cell = abs(fract(vWorld.xz * 0.5 - 0.5) - 0.5) / fwidth(vWorld.xz * 0.5);
-    float lineMajor = 1.0 - min(min(cell.x, cell.y), 1.0);
+    float lineMajor = 1.0 - min(min(cell.x, cell.y) * 0.34, 1.0);
     vec2 sub = abs(fract(vWorld.xz - 0.5) - 0.5) / fwidth(vWorld.xz);
-    float lineMinor = 1.0 - min(min(sub.x, sub.y), 1.0);
+    float lineMinor = 1.0 - min(min(sub.x, sub.y) * 0.5, 1.0);
 
     // Slow luminous pulse so static frames are never mistaken for a 2D image.
     float pulse = 0.75 + 0.25 * sin(uTime * 1.4);
@@ -142,8 +153,10 @@ void main() {
     color = mix(color, lineColor * 0.45, lineMinor * 0.6);
     color = mix(color, lineColor, lineMajor);
 
-    // Warm origin marker so yaw is readable.
-    float marker = 1.0 - smoothstep(0.7, 1.1, length(vWorld.xz));
+    // Warm origin marker so yaw is readable. 3.5 m radius, not 1 m: the
+    // camera stands near the origin, so a 1 m disc hides below the visible
+    // frustum's bottom edge and reads as "no marker".
+    float marker = 1.0 - smoothstep(2.0, 3.5, length(vWorld.xz));
     color = mix(color, vec3(0.95, 0.65, 0.25), marker);
 
     fragColor = vec4(mix(color, fogColor, fog), 1.0);
@@ -426,7 +439,10 @@ GLuint EzVrSceneFboForEye( uint32_t eye, uint32_t imageIndex )
         {
                 return 0;
         }
-        return g_scene.fbos[imageIndex * g_scene.eyeCount + eye];
+        // Eye-major, matching how EzVrRun packs the image array
+        // (images[eye * perEye + i]). This was image-major, which silently
+        // rendered each eye into the other eye's images on some frames.
+        return g_scene.fbos[eye * g_scene.imagesPerEye + imageIndex];
 }
 
 GLuint EzVrSceneImageForEye( uint32_t eye, uint32_t imageIndex )
@@ -435,17 +451,36 @@ GLuint EzVrSceneImageForEye( uint32_t eye, uint32_t imageIndex )
         {
                 return 0;
         }
-        return g_scene.images[imageIndex * g_scene.eyeCount + eye];
+        // Eye-major; see above.
+        return g_scene.images[eye * g_scene.imagesPerEye + imageIndex];
 }
 
 void EzVrSceneDraw( const EzVrEyeFrame *eyes, int eyeCount, double predictedDisplayTime )
 {
         glUseProgram( g_scene.program );
-        glUniform1f( g_scene.uTime, (float )predictedDisplayTime );
+        // XrTime is nanoseconds; the shader wants seconds for its pulse.
+        // Feeding raw ns through float -> sin() is garbage on mobile GPUs
+        // (huge-arg range reduction), so convert on the CPU.
+        // TEMP DIAG 2026-10-09d: log the converted value once (sanity: expect
+        // seconds-since-boot, ~1e3-1e6, finite).
+        static bool timeLogged = false;
+        if ( !timeLogged )
+        {
+                timeLogged = true;
+                EZLOG( "uTime seconds=%f (raw XrTime=%f)", predictedDisplayTime * 1e-9, predictedDisplayTime );
+        }
+        glUniform1f( g_scene.uTime, (float )( predictedDisplayTime * 1e-9 ) );
 
         glBindVertexArray( g_scene.vao );
         glUniform1f( g_scene.uExtent, 60.0f );
-        glUniform1f( g_scene.uHeight, 0.0f );
+        // LOCAL space's origin height is arbitrary (on Quest it is typically
+        // head height at tracking start), so a ground plane fixed at y=0 sits
+        // exactly at eye level and renders edge-on: invisible. Pin this
+        // diagnostic floor 1.6 m below the head instead (viewInv column 3 is
+        // the camera world position). Stereo parallax still reads; physical
+        // floor accuracy is not this scene's job.
+        float headY = eyeCount > 0 ? eyes[0].viewInv[1 + 3 * 4] : 1.6f;
+        glUniform1f( g_scene.uHeight, headY - 1.6f );
         glUniformMatrix4fv( g_scene.uProj, 1, GL_FALSE, eyes[0].proj );
         glUniformMatrix4fv( g_scene.uView, 1, GL_FALSE, eyes[0].view );
 
@@ -480,13 +515,18 @@ void EzVrMatProjFromFov( float out[16], const XrFovf &fov, float nearZ, float fa
         const float t = n * tanf( fov.angleUp );
 
         memset( out, 0, sizeof( float ) * 16 );
-        out[0 + 0 * 4] = 2.0f * n / ( r - l );                  // col 0
-        out[0 + 1 * 4] = 2.0f * n / ( t - b );                  // col 1
-        out[0 + 2 * 4] = ( r + l ) / ( r - l );                 // col 2
-        out[1 + 2 * 4] = ( t + b ) / ( t - b );
-        out[2 + 2 * 4] = -( f + n ) / ( f - n );
-        out[3 + 2 * 4] = -2.0f * f * n / ( f - n );
-        out[2 + 3 * 4] = -1.0f;                                                 // col 3
+        // Indexing is out[row + col * 4] throughout. Three of these were
+        // misplaced (y scale in row 0, depth offset and -1 transposed),
+        // which collapses the clip volume so every drawn primitive falls
+        // outside [-w, w]: clear color only, no scene. Diagnosed 2026-10-09
+        // from a headset showing the clear color with a live FOCUSED session.
+        out[0 + 0 * 4] = 2.0f * n / ( r - l );                  // row 0: x scale
+        out[1 + 1 * 4] = 2.0f * n / ( t - b );                  // row 1: y scale
+        out[0 + 2 * 4] = ( r + l ) / ( r - l );                 // row 0: x offset
+        out[1 + 2 * 4] = ( t + b ) / ( t - b );                 // row 1: y offset
+        out[2 + 2 * 4] = -( f + n ) / ( f - n );                 // row 2: depth scale
+        out[2 + 3 * 4] = -2.0f * f * n / ( f - n );              // row 2: depth offset
+        out[3 + 2 * 4] = -1.0f;                                                 // row 3: perspective divide
 }
 
 void EzVrMatFromPose( float outView[16], float outViewInv[16], const XrPosef &pose )

@@ -138,6 +138,14 @@ public:
 			bool			IsRunningScriptedSceneAndNotPaused( CBaseFlex *pActor, bool bIgnoreInstancedScenes );
 			bool			IsRunningScriptedSceneWithSpeech( CBaseFlex *pActor, bool bIgnoreInstancedScenes );
 			bool			IsRunningScriptedSceneWithSpeechAndNotPaused( CBaseFlex *pActor, bool bIgnoreInstancedScenes );
+#ifdef EZ2
+			// AI backplane port (mapbase). "Is this actor's speech currently being
+			// played back by a scene?" -- as opposed to
+			// IsRunningScriptedSceneWithSpeech() above, which asks whether the
+			// scene has speech that has NOT played yet. EZ2's speech AI uses this
+			// to avoid talking over a cutscene line.
+			bool			IsTalkingInAScriptedScene( CBaseFlex *pActor, bool bIgnoreInstancedScenes = false );
+#endif
 
 
 private:
@@ -459,6 +467,10 @@ public:
 
 	bool					HasUnplayedSpeech( void );
 	bool					HasFlexAnimation( void );
+#ifdef EZ2
+	// AI backplane port (mapbase). Backs CSceneManager::IsTalkingInAScriptedScene.
+	bool					IsPlayingSpeech( void );
+#endif
 
 	void					SetCurrentTime( float t, bool forceClientSync );
 
@@ -1029,6 +1041,34 @@ bool CSceneEntity::HasFlexAnimation( void )
 
 	return false;
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Is a SPEAK choreo event happening right now?
+// Output : Returns true on success, false on failure.
+//-----------------------------------------------------------------------------
+bool CSceneEntity::IsPlayingSpeech( void )
+{
+	if ( m_pScene )
+	{
+		float flTime = m_pScene->GetTime();
+		for ( int i = 0; i < m_pScene->GetNumEvents(); i++ )
+		{
+			CChoreoEvent *e = m_pScene->GetEvent( i );
+			if ( e->GetType() == CChoreoEvent::SPEAK )
+			{
+				// Note: the start-time half of the test is commented out upstream
+				// too, so an already-finished line inside a still-running scene
+				// still counts. Kept as-is to match the reference behaviour.
+				if ( flTime <= e->GetEndTime() )
+					return true;
+			}
+		}
+	}
+
+	return false;
+}
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -5253,6 +5293,35 @@ bool CSceneManager::IsRunningScriptedSceneWithSpeech( CBaseFlex *pActor, bool bI
 }
 
 
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Is the actor's speech line being spoken right now?
+//-----------------------------------------------------------------------------
+bool CSceneManager::IsTalkingInAScriptedScene( CBaseFlex *pActor, bool bIgnoreInstancedScenes )
+{
+	int c = m_ActiveScenes.Count();
+	for ( int i = 0; i < c; i++ )
+	{
+		CSceneEntity *pScene = m_ActiveScenes[ i ].Get();
+		if ( !pScene ||
+			 !pScene->IsPlayingBack() ||
+			 pScene->IsPaused() ||
+			 ( bIgnoreInstancedScenes && dynamic_cast<CInstancedSceneEntity *>(pScene) != NULL ) )
+		{
+			continue;
+		}
+		
+		if ( pScene->InvolvesActor( pActor ) )
+		{
+			if ( pScene->IsPlayingSpeech() )
+				return true;
+		}
+	}
+	return false;
+}
+#endif
+
+
 bool CSceneManager::IsRunningScriptedSceneWithSpeechAndNotPaused( CBaseFlex *pActor, bool bIgnoreInstancedScenes )
 {
 	int c = m_ActiveScenes.Count();
@@ -5362,6 +5431,16 @@ bool IsRunningScriptedSceneWithSpeechAndNotPaused( CBaseFlex *pActor, bool bIgno
 {
 	return GetSceneManager()->IsRunningScriptedSceneWithSpeechAndNotPaused( pActor, bIgnoreInstancedScenes );
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Free-function wrapper, as the rest of the scene predicates have.
+//-----------------------------------------------------------------------------
+bool IsTalkingInAScriptedScene( CBaseFlex *pActor, bool bIgnoreInstancedScenes )
+{
+	return GetSceneManager()->IsTalkingInAScriptedScene( pActor, bIgnoreInstancedScenes );
+}
+#endif
 
 
 //===========================================================================================================

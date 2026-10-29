@@ -4263,3 +4263,20 @@ int CNPC_Citizen::DrawDebugTextOverlays( void )
 	}
 	return text_offset;
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Did this citizen only just start being afraid of pTarget?
+//-----------------------------------------------------------------------------
+bool CNPC_Citizen::JustStartedFearing( CBaseEntity *pTarget )
+{
+	Assert( IRelationType( pTarget ) == D_FR );
+
+	// We don't have a built-in way to figue out when we started panicking,
+	// but if we just said TLK_DANGER, our fear sound, don't register.
+	if ( gpGlobals->curtime - GetExpresser()->GetTimeSpokeConcept(TLK_DANGER) < 1.0f )
+		return true;
+
+	return false;
+}
+#endif

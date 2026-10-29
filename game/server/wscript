@@ -13,6 +13,9 @@ games = {
 	# Extra EZ1 units (manhack toss, APC, EZ2 NPCs, custom weapons) sit in
 	# server_ez1_extras.vpc. Shared #ifdef EZ hunks are still a follow-up.
 	'ez1': ['server_base.vpc', 'server_hl2.vpc', 'server_ez1_extras.vpc'],
+	# EZ2 target profile. M1 ships wiring + the ez2vr convar contract only;
+	# the EZ2 unit roster joins in server_ez2_extras.vpc in M2+.
+	'ez2': ['server_base.vpc', 'server_hl2.vpc', 'server_ez2_extras.vpc'],
 	'episodic':['server_base.vpc', 'server_episodic.vpc'],
 	'hl2mp': ['server_base.vpc', 'server_hl2mp.vpc'],
 	'portal': ['server_base.vpc', 'server_portal.vpc'],
@@ -43,6 +46,13 @@ def configure(conf):
 
 	if game == 'ez1':
 		conf.env.append_unique('DEFINES', ['EZ=1', 'EZ1=1', 'HE_APC=1', 'GLOWS_ENABLE=1'])
+
+	# Must match EZ2's server_ez2.vpc $PreprocessorDefinitions, or #ifdef
+	# behaviour silently drifts from the desktop reference build.
+	if game == 'ez2':
+		conf.env.append_unique('DEFINES',
+			['EZ=1', 'EZ2=1', 'HE_APC=1', 'GLOWS_ENABLE=1', 'CSS_WEAPONS_IN_HL2=1'])
+
 def build(bld):
 	game = vpc_parser.parse_vpcs( bld.env, games[bld.env.GAMES], '../..' )
 
@@ -64,6 +74,38 @@ def build(bld):
 			'ez2',
 			'mod',
 			'Human_Error',
+		]
+
+	# M2: the EZ2 player/weapon roster plus the minimal mapbase backplane
+	# (info_remarkable, reached as "mapbase/info_remarkable.h"). The remaining
+	# roster dirs (mod, Human_Error extras) join in M3 as their files land.
+	# The shared ez2vr/ez2 headers are reached through the
+	# $AdditionalIncludeDirectories in server_ez2_extras.vpc.
+	if bld.env.GAMES == 'ez2':
+		includes += [
+			# 'hl2' MUST come before the hl2mp dirs below. waf emits the -I list
+			# in this order, and game/server/hl2mp shadows game/server/hl2 for
+			# every basename both trees ship (weapon_physcannon.h,
+			# grenade_satchel.h, ...). With hl2mp first, hl2_gamerules.cpp
+			# picked up the HL2MP physcannon header and lost
+			# PhysCannonAccountableForObject. server_hl2.vpc puts .\hl2 on the
+			# path too, but only at the very end, after these.
+			'hl2',
+			'ez2',
+			'ez2vr',
+			'mapbase',
+			# weapon_displacer_pistol.h derives from CDisplacerSink, which
+			# upstream declares in episodic/grenade_hopwire.h. The hl2 profile
+			# never compiles that header, so the ez2 profile has to put the dir
+			# on the include path itself.
+			'episodic',
+			# ez2_player.cpp includes hl2/grenade_satchel.h, which upstream
+			# reaches into hl2mp/weapon_slam.h for the weapon base. The hl2
+			# profile never compiles the satchel, so these two are only needed
+			# here; shared/hl2mp comes with it because hl2mp_player.h wants
+			# hl2mp_player_shared.h from there.
+			'hl2mp',
+			'../shared/hl2mp',
 		]
 
 	defines = []

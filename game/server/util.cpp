@@ -295,6 +295,19 @@ int UTIL_EntitiesInSphere( const Vector &center, float radius, CFlaggedEntitiesE
 	return pEnum->GetCount();
 }
 
+#ifdef EZ2
+// Minimal mapbase backplane (TRANSPLANT-A §4.1). Mapbase guards this with
+// MAPBASE; the EZ2 displacer pistol needs it to find what it dropped an entity
+// on top of. CFlaggedEntitiesEnum and IPartitionEnumerator::
+// EnumerateElementsAtPoint both already exist in this tree, so this is the only
+// piece that was missing.
+int UTIL_EntitiesAtPoint( const Vector &point, CFlaggedEntitiesEnum *pEnum )
+{
+	partition->EnumerateElementsAtPoint( PARTITION_ENGINE_NON_STATIC_EDICTS, point, false, pEnum );
+	return pEnum->GetCount();
+}
+#endif
+
 CEntitySphereQuery::CEntitySphereQuery( const Vector &center, float radius, int flagMask )
 {
 	m_listIndex = 0;

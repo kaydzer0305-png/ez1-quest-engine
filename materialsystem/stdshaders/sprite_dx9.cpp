@@ -488,3 +488,7 @@ BEGIN_VS_SHADER( Sprite_DX9,
 		}
 	}
 END_SHADER
+// Mapbase alias: see the note in lightmappedgeneric_dx9.cpp.
+BEGIN_INHERITED_SHADER( SDK_Sprite, Sprite_DX9, "Mapbase alias for Sprite_DX9" )
+END_INHERITED_SHADER
+

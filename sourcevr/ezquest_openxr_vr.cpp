@@ -14,6 +14,7 @@ and allocates per-eye Source render targets for the client stereo loop.
 #include "materialsystem/itexture.h"
 
 #include <dlfcn.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <android/log.h>
@@ -22,9 +23,48 @@ and allocates per-eye Source render targets for the client stereo loop.
 #define EZLOG( ... ) __android_log_print( ANDROID_LOG_INFO, EZTAG, __VA_ARGS__ )
 #define EZERR( ... ) __android_log_print( ANDROID_LOG_ERROR, EZTAG, __VA_ARGS__ )
 
+// Whether this process should run the Source VR stereo path at all.
+//
+// The stereo path is only meaningful when an OpenXR session exists to render
+// into. sys_dll2.cpp hardcodes m_bSupportsVR = true on Android and calls
+// SetShouldForceVRMode()/Activate() unconditionally, so a flat SDL boot (the
+// BOOT_MODE=flat path, driven from SDLActivity -> LauncherMainAndroid) would
+// otherwise still take the stereo loop with no XR runtime behind it. That is
+// not a degraded picture, it is a broken one: EZQuestVrPublishEyes() is only
+// called from the XR frame loop, so the tracking snapshot stays invalid,
+// GetEyeProjectionMatrix() hands back an identity matrix while the caller still
+// sets m_bViewToProjectionOverride, GetDisplayBounds() claims VR-sized bounds,
+// and the 3D pass lands in per-eye render targets that nothing composites. The
+// window ends up black.
+//
+// EZQUEST_VR_ENABLE is the opt-out, and it is an opt-out only: unset or any
+// value other than 0 keeps the previous forced-VR-on behavior, so the hl2 and
+// ez1 profiles are bit-for-bit unaffected unless something asks otherwise. The
+// Java layer sets it explicitly on both paths -- "1" from the VR engine
+// activity, "0" from the flat one -- so the mode never depends on a race
+// between the XR worker thread and engine init, and never flips mid-boot after
+// the video mode has already been chosen.
+static int VrEnabledByEnv()
+{
+        static int cached = -1;
+        if ( cached < 0 )
+        {
+                const char *v = getenv( "EZQUEST_VR_ENABLE" );
+                cached = ( v && v[0] == '0' ) ? 0 : 1;
+                EZLOG( "EZQUEST_VR_ENABLE=%s -> VR stereo path %s",
+                        v ? v : "(unset)", cached ? "ON" : "OFF" );
+        }
+        return cached;
+}
+
 struct XrQuaternionf { float x, y, z, w; };
 struct XrVector3f { float x, y, z; };
-struct XrPosef { XrQuaternionf orientation; XrVector3f position; };
+// Field order matches openxr's XrPose (position, then orientation). A local
+// struct with orientation-first compiles to the same SIZE but swaps the two,
+// so views[].pose.position would read orientation bytes (a cm-scale mid-eye
+// error in GetMidEyeFromEye). The memcpy'd view/proj matrices and the
+// midPos/midQuat arrays are layout-independent and were always fine.
+struct XrPosef { XrVector3f position; XrQuaternionf orientation; };
 struct XrFovf { float angleLeft, angleRight, angleUp, angleDown; };
 struct XrView { int type; const void *next; XrPosef pose; XrFovf fov; };
 
@@ -85,6 +125,8 @@ public:
                 m_rtDepth[0] = m_rtDepth[1] = NULL;
                 m_rtW = m_rtH = 0;
                 m_loggedSubmit[0] = m_loggedSubmit[1] = false;
+                m_vrEnabled = VrEnabledByEnv() != 0;
+                m_loggedActivate = false;
         }
         virtual bool Connect( CreateInterfaceFn factory ) { BaseClass::Connect(factory); Resolve(); return true; }
         virtual void Disconnect() { BaseClass::Disconnect(); }
@@ -96,13 +138,20 @@ public:
         virtual InitReturnVal_t Init()
         {
                 Resolve();
+                if ( !m_vrEnabled )
+                {
+                        m_active = m_force = false;
+                        EZLOG( "init: VR stereo path disabled by EZQUEST_VR_ENABLE -- "
+                               "booting monoscopic, no per-eye render targets will be allocated" );
+                        return INIT_OK;
+                }
                 m_active = m_force = true;
                 EZLOG("init copy=%p submit=%p (VR forced on)", (void*)m_copy, (void*)m_submitEye);
                 return INIT_OK;
         }
         virtual void Shutdown() { ShutdownRenderTargets(); }
-        virtual bool ShouldRunInVR() { return true; }
-        virtual bool IsHmdConnected() { return true; }
+        virtual bool ShouldRunInVR() { return m_vrEnabled; }
+        virtual bool IsHmdConnected() { return m_vrEnabled; }
         virtual void GetViewportBounds( VREye eye, int *x, int *y, int *w, int *h )
         {
                 Refresh();
@@ -244,13 +293,22 @@ public:
         }
         virtual bool Activate()
         {
+                if ( !m_vrEnabled )
+                {
+                        if ( !m_loggedActivate )
+                        {
+                                m_loggedActivate = true;
+                                EZLOG( "Activate: ignored -- VR stereo path disabled by EZQUEST_VR_ENABLE" );
+                        }
+                        return false;
+                }
                 m_active = m_force = true;
                 EZLOG("Activate");
                 EnsureEyeRenderTargets();
                 return true;
         }
-        virtual void Deactivate() { m_active = false; }
-        virtual bool ShouldForceVRMode() { return true; }
+        virtual void Deactivate() { m_active=false; }
+        virtual bool ShouldForceVRMode() { return m_vrEnabled && m_force; }
         virtual void SetShouldForceVRMode() { m_force = true; }
 private:
         int EyeW() const { return m_snap.width ? (int)m_snap.width : 1440; }
@@ -295,6 +353,8 @@ private:
         }
         bool Refresh() { Resolve(); return m_copy ? m_copy(&m_snap)!=0 : false; }
         bool m_active, m_force;
+        bool m_vrEnabled;
+        bool m_loggedActivate;
         CopyTrackingFn m_copy;
         SubmitEyeFn m_submitEye;
         EzVrTrackingSnapshot m_snap;

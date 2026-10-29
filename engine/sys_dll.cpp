@@ -20,6 +20,7 @@
 #if defined(LINUX)
 #include <unistd.h>
 #include <fcntl.h>
+#include <dlfcn.h>
 #endif
 
 #if defined( USE_SDL )
@@ -402,6 +403,16 @@ void Sys_Error_Internal( bool bMinidump, const char *error, va_list argsList )
 	// Write the error to the log and ensure the log contents get written to disk
 	g_Log.Printf( "Engine error: %s\n", text );
 	g_Log.Flush();
+
+	// Print a native backtrace before the error exit. Error()/Sys_Exit() are clean
+	// exits, not signals, so the engine's SIGSEGV handler in
+	// launcher/android/crashhandler.cpp never sees them and a fatal used to leave
+	// nothing behind but its message. That made several boot failures on this port
+	// undiagnosable -- the CUtlRBTree overflow in particular, which needs its
+	// container and call site to chase.
+	//
+	// tier0 resolves the unwinder by name; see DumpFatalBacktrace in dbg.h.
+	DumpFatalBacktrace( text );
 
 	g_bInErrorExit = true;
 

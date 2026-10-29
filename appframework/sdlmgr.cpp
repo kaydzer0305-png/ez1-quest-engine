@@ -26,6 +26,32 @@
 extern "C" int EZQuestVrBindEngineContext( void );
 extern "C" int EZQuestVrSubmitEngineFrame( unsigned srcTex, int width, int height );
 extern "C" int EZQuestVrStereoEyesReady( void );
+
+// EZ2VR external-GL mode: the engine runs under a bare NativeActivity behind
+// an OpenXR session instead of SDLActivity, so there is no SDL video backend
+// to initialize — SDL_Init(SDL_INIT_VIDEO) cannot succeed there and used to
+// abort the whole :engine process (NULL-jclass JNI abort, 2026-10-09). When
+// EZQUEST_VR_EXTERNAL_GL is truthy the video/window/swap setup below is
+// skipped and the XR share-group context (EZQuestVrBindEngineContext) is used
+// instead. Truthiness matches the XR side's EnvTruthy: "0"/"no"/"false*"
+// mean off, anything else non-empty means on. Flat (SDLActivity) exports 0.
+static bool EzQuestExternalGL( void )
+{
+	static int cached = -1;
+	if ( cached < 0 )
+	{
+		const char *v = getenv( "EZQUEST_VR_EXTERNAL_GL" );
+		cached = 0;
+		if ( v && v[0] )
+		{
+			if ( !( ( v[0] == '0' && v[1] == '\0' ) ||
+			        ( ( v[0] == 'n' || v[0] == 'N' ) && ( v[1] == 'o' || v[1] == 'O' ) && v[2] == '\0' ) ||
+			        ( v[0] == 'f' || v[0] == 'F' ) ) )
+				cached = 1;
+		}
+	}
+	return cached != 0;
+}
 #endif
 
 
@@ -519,6 +545,17 @@ InitReturnVal_t CSDLMgr::Init()
 	if (m_Window != NULL)
 		return INIT_OK;  // already initialized.
 
+#if defined( ANDROID )
+	if ( EzQuestExternalGL() )
+	{
+		// No SDL video backend under the XR NativeActivity (see above): skip
+		// SDL_Init(VIDEO) outright. Everything below that touches m_Window is
+		// guarded on it, and the GL context comes from the XR share group in
+		// CreateHiddenGameWindow.
+		Msg( "EZQuest: external-GL mode, skipping SDL video init\n" );
+	}
+	else
+#endif
 	if (!SDL_WasInit(SDL_INIT_VIDEO))
 	{
 		if (SDL_Init(SDL_INIT_VIDEO) == -1)
@@ -539,8 +576,15 @@ InitReturnVal_t CSDLMgr::Init()
 #endif
 	}
 
-	fprintf(stderr, "SDL video target is '%s'\n", SDL_GetCurrentVideoDriver());
-	Msg("SDL video target is '%s'\n", SDL_GetCurrentVideoDriver());
+	{
+		const char *drv = NULL;
+#if defined( ANDROID )
+		if ( !EzQuestExternalGL() )
+#endif
+			drv = SDL_GetCurrentVideoDriver();
+		fprintf(stderr, "SDL video target is '%s'\n", drv ? drv : "(external-GL, no SDL video)");
+		Msg("SDL video target is '%s'\n", drv ? drv : "(external-GL, no SDL video)");
+	}
 
 	m_bForbidMouseGrab = true;
 	if ( !CommandLine()->FindParm("-nomousegrab") && CommandLine()->FindParm("-mousegrab") )
@@ -683,9 +727,24 @@ InitReturnVal_t CSDLMgr::Init()
 	//  to make a window! We make a 640x480 one here, and later, when asked
 	//  to really actually make a window, we just resize the one we built here.
 	if ( !CreateHiddenGameWindow( "", 1280, 720 ) )
+	{
+#if defined( ANDROID )
+		// External-GL mode must not Error() here either (see the branch in
+		// CreateHiddenGameWindow): without an SDLActivity the error dialog
+		// itself aborts the process. The Msg in the branch already names the
+		// cause; INIT_FAILED lets the engine shut down through its normal
+		// path instead of taking the XR loop down with it.
+		if ( EzQuestExternalGL() )
+		{
+			Msg( "EZQuest: external-GL window setup failed, not starting video\n" );
+			return INIT_FAILED;
+		}
+#endif
 		Error( "CreateGameWindow failed" );
+	}
 
-	SDL_HideWindow( m_Window );
+	if ( m_Window )
+		SDL_HideWindow( m_Window );
 
 	return INIT_OK;
 }
@@ -737,6 +796,20 @@ void CSDLMgr::Shutdown()
 bool CSDLMgr::CreateGameWindow( const char *pTitle, bool bWindowed, int width, int height )
 {
 	SDLAPP_FUNC;
+
+#if defined( ANDROID )
+	// External-GL mode: the context is already bound (see
+	// CreateHiddenGameWindow); there is no window to resize or show. Record
+	// the size and stay headless.
+	if ( EzQuestExternalGL() && m_GLContext )
+	{
+		if ( width > 0 )
+			m_WindowWidth = width;
+		if ( height > 0 )
+			m_WindowHeight = height;
+		return true;
+	}
+#endif
 
 	// CreateGameWindow is being called. The the game initially calls this with width and height == 0.
 	//  But we don't want to show the window until it gets resized to what it should be, so we keep track as to whether
@@ -809,6 +882,49 @@ bool CSDLMgr::CreateHiddenGameWindow( const char *pTitle, int width, int height 
 
 	m_bFullScreen = false;
 	sdl_displayindex_fullscreen.SetValue( -1 );
+
+#if defined( ANDROID )
+	// External-GL mode (see EzQuestExternalGL): no SDL window exists nor can
+	// one be created under the bare XR NativeActivity. Bind the XR share-group
+	// context (made current on the XR pbuffer by the call) and run headless:
+	// every present goes through EZQuestVrSubmitEngineFrame / per-eye submits
+	// in ShowPixels, never through SDL_GL_SwapWindow. m_Window stays NULL and
+	// all window handle uses below are skipped with it.
+	if ( EzQuestExternalGL() )
+	{
+		// Never Error() from this branch: under the bare XR NativeActivity
+		// there is no SDLActivity, so Source's Error() dialog
+		// (SDL_ShowMessageBox → Android_JNI_ShowMessageBox with a NULL jclass)
+		// aborts the whole :engine process via ART — including the healthy XR
+		// loop. Log and return false instead; the caller fails gracefully to
+		// the Java recovery screen.
+		if ( !EZQuestVrBindEngineContext() )
+		{
+			Msg( "EZQuest: engine GL context bind failed — the XR loop is not up (PresentInit runs before first present)\n" );
+			return false;
+		}
+		m_GLContext = (SDL_GLContext)0x1;
+		Msg( "EZQuest: engine GL context bound to XR share group (external-GL, no window)\n" );
+
+		gGL = GetOpenGLEntryPoints(VoidFnPtrLookup_GlMgr);
+
+		gGL->glGenFramebuffers(1, &m_readFBO);
+
+		gGL->glViewport(0, 0, width, height);
+		gGL->glScissor(0, 0, width, height);
+
+		// No default framebuffer to clear-to-present here (pbuffer only), so
+		// just flush a clean state rather than swapping a NULL window.
+		gGL->glClearColor(0,0,0,0);
+		gGL->glClear(GL_COLOR_BUFFER_BIT);
+		gGL->glFlush();
+
+		m_WindowWidth = width;
+		m_WindowHeight = height;
+		m_nWindowRefCount = 1;
+		return true;
+	}
+#endif
 
 #if defined( DX_TO_GL_ABSTRACTION )
 	// Set up GL context...
@@ -994,6 +1110,16 @@ bool CSDLMgr::MakeContextCurrent( PseudoGLContextPtr hContext )
 {
 	SDLAPP_FUNC;
 
+#if defined( ANDROID )
+	if ( EzQuestExternalGL() )
+	{
+		// Single XR share-group context: (re-)bind it. There is no SDL
+		// window to host extra contexts against, so any handle just
+		// rebinds the one context and reports success.
+		(void)hContext;
+		return EZQuestVrBindEngineContext() != 0;
+	}
+#endif
 	// We only ever have one GL context on Linux at the moment, so don't spam these calls.
 	return SDL_GL_MakeCurrent(m_Window, (SDL_GLContext)hContext ) == 0;
 }
@@ -1460,6 +1586,13 @@ void CSDLMgr::ShowPixels( CShowPixelsParams *params )
 	{
 		m_flPrevGLSwapWindowTime = 0.0;
 		CheckGLError( __LINE__ );
+		return;
+	}
+	// External-GL mode with the XR present layer not yet up (submit refused):
+	// there is no SDL window to swap. Drop the frame rather than swapping NULL.
+	if ( EzQuestExternalGL() )
+	{
+		m_flPrevGLSwapWindowTime = 0.0;
 		return;
 	}
 #endif

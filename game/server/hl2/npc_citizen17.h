@@ -213,6 +213,29 @@ public:
 	//---------------------------------
 	bool 			IsMedic() 			{ return HasSpawnFlags(SF_CITIZEN_MEDIC); }
 	bool 			IsAmmoResupplier() 	{ return HasSpawnFlags(SF_CITIZEN_AMMORESUPPLIER); }
+
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1). Upstream these all live on
+	// CAI_BehaviorSurrender, which ez2_player.cpp reaches because EZ2 citizens
+	// derive from it; the surrender behaviour itself is M3 roster work
+	// (ai_behavior_surrender.{h,cpp}).
+	//
+	// All four are stubbed to the "not surrendered" answer on purpose: it is
+	// the direction in which every caller in ez2_player.cpp falls through to
+	// ordinary HL2 behaviour instead of acting on surrender state that does not
+	// exist. The cost is that EZ2's surrender system (shout-at-civilians,
+	// surrendered-medic healing) is inert in M2 rather than misbehaving.
+	bool			CanSurrender()		{ return false; }
+	bool			IsSurrendered() const	{ return false; }
+	bool			SurrenderAutomatically() const { return false; }
+	bool			IsSurrenderIdle()	{ return false; }
+
+	// AI backplane port (mapbase). Overrides CBaseCombatCharacter's false
+	// default: if the citizen just voiced its fear line, the player should not
+	// yet be told it is frightened of them. Ported verbatim; it needs
+	// GetTimeSpokeConcept, which this tree has.
+	bool			JustStartedFearing( CBaseEntity *pTarget );
+#endif
 	
 	bool 			CanHeal();
 	bool 			ShouldHealTarget( CBaseEntity *pTarget, bool bActiveUse = false );

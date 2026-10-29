@@ -120,13 +120,14 @@ public class LauncherActivity extends Activity {
             Intent engine;
             if ("vr".equals(bootMode)) {
                 engine = new Intent(this, EngineActivity.class);
+                engine.setAction(EngineActivity.ACTION_START_ENGINE);
                 // Start as an immersive VR activity so the runtime grants the
                 // OpenXR session focus (VISIBLE/FOCUSED) instead of leaving
                 // it stuck at READY with 0 frames.
                 engine.addCategory("com.oculus.intent.category.VR");
                 engine.addCategory("org.khronos.openxr.intent.category.IMMERSIVE_HMD");
-                engine.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                        | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                engine.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             } else {
                 engine = new Intent(this, ValveActivity2.class);
             }

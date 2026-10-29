@@ -53,10 +53,32 @@ public:
 
 	virtual void	ItemHolsterFrame( void );
 
+#ifdef EZ2
+	// Dual wield accessors, ported from mapbase (which guards the whole
+	// dual-wield feature with #ifdef EZ2).
+	//
+	// Only the ACCESSORS are ported: CBaseHLCombatWeapon::CanDualWield() is the
+	// feature switch and it defaults to false, so every call site that is gated
+	// on it stays dormant. The rest of mapbase's dual-wield system -- the
+	// ItemPostFrame/Operator_HandleAnimEvent/ActivityOverride overrides, the
+	// doubled clip math, the viewmodel and the client half -- is NOT here. Turn
+	// this off by not defining EZ2 and nothing changes; turn the full system on
+	// by porting it alongside these.
+	virtual bool			CanDualWield() const { return false; }
+	bool					IsDualWielding() const { return m_hLeftHandGun != NULL; }
+	CBaseAnimating			*GetLeftHandGun() const { return m_hLeftHandGun; }
+	void					SetLeftHandGun( CBaseAnimating *pGun ) { m_hLeftHandGun = pGun; }
+	CBaseAnimating			*CreateLeftHandGun();
+#endif
+
 	int				m_iPrimaryAttacks;		// # of primary attacks performed with this weapon
 	int				m_iSecondaryAttacks;	// # of secondary attacks performed with this weapon
 
 protected:
+
+#ifdef EZ2
+	CHandle<CBaseAnimating>	m_hLeftHandGun;
+#endif
 
 	bool			m_bLowered;			// Whether the viewmodel is raised or lowered
 	float			m_flRaiseTime;		// If lowered, the time we should raise the viewmodel

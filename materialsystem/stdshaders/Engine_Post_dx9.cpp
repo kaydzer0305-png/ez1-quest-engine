@@ -225,3 +225,7 @@ BEGIN_VS_SHADER_FLAGS( Engine_Post_dx9, "Engine post-processing effects (softwar
 		Draw();
 	}
 END_SHADER
+// Mapbase alias: see the note in lightmappedgeneric_dx9.cpp.
+BEGIN_INHERITED_SHADER_FLAGS( SDK_Engine_Post, Engine_Post_dx9, "Mapbase alias for Engine_Post_dx9", SHADER_NOT_EDITABLE )
+END_INHERITED_SHADER
+

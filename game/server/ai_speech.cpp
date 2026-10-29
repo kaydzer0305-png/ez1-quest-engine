@@ -16,6 +16,10 @@
 #include "AI_Criteria.h"
 #include "isaverestore.h"
 #include "sceneentity.h"
+#ifdef EZ2
+#include "ai_squad.h"
+#include "hl2_player.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include <tier0/memdbgon.h>
@@ -377,14 +381,147 @@ AI_Response *CAI_Expresser::SpeakFindResponse( AIConcept_t concept, const char *
 	return result;
 }
 
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Find a response, taking a pre-built criteria set as the modifiers
+// Input  : modifiers - tier 2 of the merge (see the comments in the body)
+//-----------------------------------------------------------------------------
+AI_Response *CAI_Expresser::SpeakFindResponse( AIConcept_t concept, const AI_CriteriaSet &modifiers )
+{
+	IResponseSystem *rs = GetOuter()->GetResponseSystem();
+	if ( !rs )
+	{
+		Assert( !"No response system installed for CAI_Expresser::GetOuter()!!!" );
+		return NULL;
+	}
+
+	AI_CriteriaSet set;
+	// Always include the concept name
+	set.AppendCriteria( "concept", concept, CONCEPT_WEIGHT );
+
+	// Tier 1: Criteria
+	// Let our outer fill in most match criteria
+	GetOuter()->ModifyOrAppendCriteria( set );
+
+	// Append local player criteria to set, but not if this is a player doing the talking
+	if ( !GetOuter()->IsPlayer() )
+	{
+		CBasePlayer *pPlayer = UTIL_PlayerByIndex( 1 );
+		if( pPlayer )
+			pPlayer->ModifyOrAppendPlayerCriteria( set );
+	}
+
+	// Tier 2: Modifiers
+	set.MergeSet(modifiers);
+
+	// Tier 3: Contexts
+	GetOuter()->ReAppendContextCriteria( set );
+
+	// Now that we have a criteria set, ask for a suitable response
+	AI_Response *result = new AI_Response;
+	Assert( result && "new AI_Response: Returned a NULL AI_Response!" );
+	bool found = rs->FindBestResponse( set, *result, this );
+
+	if ( rr_debugresponses.GetInt() == 3 )
+	{
+		if ( ( GetOuter()->MyNPCPointer() && GetOuter()->m_debugOverlays & OVERLAY_NPC_SELECTED_BIT ) || GetOuter()->IsPlayer() )
+		{
+			const char *pszName;
+			if ( GetOuter()->IsPlayer() )
+			{
+				pszName = ((CBasePlayer*)GetOuter())->GetPlayerName();
+			}
+			else
+			{
+				pszName = GetOuter()->GetDebugName();
+			}
+
+			if ( found )
+			{
+				char response[ 256 ];
+				result->GetResponse( response, sizeof( response ) );
+
+				Warning( "RESPONSERULES: %s spoke '%s'. Found response '%s'.\n", pszName, concept, response );
+			}
+			else
+			{
+				Warning( "RESPONSERULES: %s spoke '%s'. Found no matching response.\n", pszName, concept );
+			}
+		}
+	}
+
+	if ( !found )
+	{
+		//Assert( !"rs->FindBestResponse: Returned a NULL AI_Response!" );
+		delete result;
+		return NULL;
+	}
+
+	char response[ 256 ];
+	result->GetResponse( response, sizeof( response ) );
+
+	if ( !response[0] )
+	{
+		delete result;
+		return NULL;
+	}
+
+	if ( result->GetOdds() < 100 && random->RandomInt( 1, 100 ) <= result->GetOdds() )
+	{
+		delete result;
+		return NULL;
+	}
+
+	return result;
+}
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: Dispatches the result
 // Input  : *response - 
 //-----------------------------------------------------------------------------
-bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *result, IRecipientFilter *filter /* = NULL */ )
+bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *result, IRecipientFilter *filter /* = NULL */
+#ifdef EZ2
+	, const AI_CriteriaSet *modifiers /* = NULL */
+#endif
+	 )
 {
 	char response[ 256 ];
 	result->GetResponse( response, sizeof( response ) );
+
+#ifdef EZ2
+	// AI backplane port (mapbase). A response whose text is "$name" is a
+	// substitution: replace it with that context's value, falling back to the
+	// caller's modifier criteria when the entity has no such context.
+	if (response[0] == '$')
+	{
+		const char *context = response + 1;
+		const char *replace = GetOuter()->GetContextValue(context);
+
+		// If we can't find the context, check modifiers
+		if (!replace && modifiers)
+		{
+			for (int i = 0; i < modifiers->GetCount(); i++)
+			{
+				if (FStrEq(context, modifiers->GetName(i)))
+				{
+					replace = modifiers->GetValue(i);
+					break;
+				}
+			}
+		}
+
+		if (replace)
+		{
+			// Upstream this is CGMsg( 1, CON_GROUP_CHOREO, ... ). This tree has no
+			// convar group system at all (no CGMsg, no mapbase_con_groups.h), so
+			// the message cannot be group-filtered. Plain Msg() is the closest
+			// equivalent; the substitution behaviour itself is unchanged.
+			Msg( "Replacing %s with %s...\n", response, replace );
+			Q_strncpy(response, replace, sizeof(response));
+		}
+	}
+#endif
 
 	float delay = result->GetDelay();
 	
@@ -475,6 +612,81 @@ bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *res
 			NDebugOverlay::Text( vPrintPos, CFmtStr( "%s: %s", concept, response ), true, 1.5 );
 		}
 
+#ifdef EZ2
+		// AI backplane port: Mapbase applyContext targeting (self/squad/enemy/world).
+		if ( result->GetContext() )
+		{
+			const char *pszContext = result->GetContext();
+
+			// Check for operators. Upstream does Q_strstr(...)+1 unconditionally,
+			// which dereferences 0x1 when the context has no colon; check first.
+			const char *pColon = Q_strstr( pszContext, ":" );
+			if ( pColon && ( pColon[1] == '+' || pColon[1] == '-' ||
+				pColon[1] == '*' || pColon[1] == '/' ) )
+			{
+				pszContext = ParseApplyContext( pszContext );
+			}
+
+			int iContextFlags = result->GetContextFlags();
+			if ( iContextFlags & APPLYCONTEXT_SQUAD )
+			{
+				CAI_BaseNPC *pNPC = GetOuter()->MyNPCPointer();
+				if ( pNPC && pNPC->GetSquad() )
+				{
+					AISquadIter_t iter;
+					CAI_BaseNPC *pSquadmate = pNPC->GetSquad()->GetFirstMember( &iter );
+					while ( pSquadmate )
+					{
+						pSquadmate->AddContext( pszContext );
+
+						pSquadmate = pNPC->GetSquad()->GetNextMember( &iter );
+					}
+				}
+				// Apply to the player's squad too. Upstream EZ2 iterates
+				// pNPC->GetSquad() here; that is an upstream bug (pNPC is the
+				// player, whose NPC squad is NULL), fixed by iterating the
+				// player squad being applied to.
+				else if ( GetOuter()->IsPlayer() )
+				{
+					CHL2_Player *pPlayer = static_cast<CHL2_Player*>( GetOuter() );
+					Assert( pPlayer );
+
+					AISquadIter_t iter;
+					CAI_Squad *pPlayerSquad = pPlayer->GetPlayerSquad();
+					if ( pPlayerSquad )
+					{
+						CAI_BaseNPC *pSquadmate = pPlayerSquad->GetFirstMember( &iter );
+						while ( pSquadmate )
+						{
+							pSquadmate->AddContext( pszContext );
+
+							pSquadmate = pPlayerSquad->GetNextMember( &iter );
+						}
+					}
+				}
+			}
+			if ( iContextFlags & APPLYCONTEXT_ENEMY )
+			{
+				CBaseEntity *pEnemy = GetOuter()->GetEnemy();
+				if ( pEnemy )
+				{
+					pEnemy->AddContext( pszContext );
+				}
+			}
+			if ( iContextFlags & APPLYCONTEXT_WORLD )
+			{
+				CBaseEntity *pEntity = CBaseEntity::Instance( engine->PEntityOfEntIndex( 0 ) );
+				if ( pEntity )
+				{
+					pEntity->AddContext( pszContext );
+				}
+			}
+			if ( iContextFlags == 0 || iContextFlags & APPLYCONTEXT_SELF )
+			{
+				GetOuter()->AddContext( pszContext );
+			}
+		}
+#else
 		if ( result->IsApplyContextToWorld() )
 		{
 			CBaseEntity *pEntity = CBaseEntity::Instance( engine->PEntityOfEntIndex( 0 ) );
@@ -487,6 +699,7 @@ bool CAI_Expresser::SpeakDispatchResponse( AIConcept_t concept, AI_Response *res
 		{
 			GetOuter()->AddContext( result->GetContext() );
 		}
+#endif
 		SetSpokeConcept( concept, result );
 	}
 	else
@@ -568,6 +781,30 @@ bool CAI_Expresser::Speak( AIConcept_t concept, const char *modifiers /*= NULL*/
 	
 	return spoke;
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: Speak a concept with a pre-built criteria set as the modifiers
+//-----------------------------------------------------------------------------
+bool CAI_Expresser::Speak( AIConcept_t concept, const AI_CriteriaSet& modifiers, char *pszOutResponseChosen /* = NULL*/, size_t bufsize /* = 0 */, IRecipientFilter *filter /* = NULL */ )
+{
+	AI_Response *result = SpeakFindResponse( concept, modifiers );
+	if ( !result )
+	{
+		return false;
+	}
+
+	SpeechMsg( GetOuter(), "%s (%p) spoke %s (%f)\n", STRING(GetOuter()->GetEntityName()), GetOuter(), concept, gpGlobals->curtime );
+
+	bool spoke = SpeakDispatchResponse( concept, result, filter, &modifiers );
+	if ( pszOutResponseChosen )
+	{
+		result->GetResponse( pszOutResponseChosen, bufsize );
+	}
+
+	return spoke;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -831,6 +1068,33 @@ void CAI_Expresser::ClearSpokeConcept( AIConcept_t concept )
 {
 	m_ConceptHistories.Remove( concept );
 }
+#ifdef EZ2
+//-------------------------------------
+// Purpose: Return the most recently spoken concept
+// Input  : excludeConcept - optional concept to skip over in the history
+//-----------------------------------------------------------------------------
+AIConcept_t CAI_Expresser::GetLastSpokeConcept( AIConcept_t excludeConcept /* = NULL */ )
+{
+	int iLastSpokenIndex = m_ConceptHistories.InvalidIndex();
+	float flLast = 0.0f;
+	for ( int i = m_ConceptHistories.First(); i != m_ConceptHistories.InvalidIndex(); i = m_ConceptHistories.Next(i ) )
+	{
+		ConceptHistory_t *h = &m_ConceptHistories[ i ];
+
+		// If an 'exclude concept' was provided, skip over this entry in the history if it matches the exclude concept
+		if ( excludeConcept != NULL && FStrEq( m_ConceptHistories.GetElementName( i ), excludeConcept ) )
+			continue;
+
+		if ( h->timeSpoken >= flLast )
+		{
+			iLastSpokenIndex = i;
+			flLast = h->timeSpoken;
+		}
+	}
+
+	return iLastSpokenIndex != m_ConceptHistories.InvalidIndex() ? m_ConceptHistories.GetElementName( iLastSpokenIndex ) : NULL;
+}
+#endif
 
 //-------------------------------------
 
@@ -893,6 +1157,67 @@ void CAI_Expresser::SpeechMsg( CBaseEntity *pFlex, const char *pszFormat, ... )
 	}
 	UTIL_LogPrintf( "%s", string );
 }
+
+#ifdef EZ2
+//-----------------------------------------------------------------------------
+// Purpose: AI backplane port (Mapbase): applyContext arithmetic, e.g.
+// "key:+2:duration" adds 2 to the current value of "key" on the speaker.
+//-----------------------------------------------------------------------------
+char *CAI_Expresser::ParseApplyContext( const char *szContext )
+{
+	char szKey[128];
+	char szValue[128];
+	float flDuration = 0.0;
+
+	SplitContext( szContext, szKey, sizeof( szKey ), szValue, sizeof( szValue ), &flDuration );
+
+	// This is the value without the operator
+	const char *pszValue = szValue + 1;
+
+	// This is the operator itself
+	char cOperator = szValue[0];
+
+	// This is the value to operate with (e.g. the "7" in "+7")
+	float flNewValue = atof( pszValue );
+
+	if ( flNewValue == 0.0f )
+	{
+		// If it's really 0, then this is a waste of time
+		Warning( "\"%s\" was detected by applyContext operators as an operable number, but it's not.\n", szValue );
+		return (char *)szContext;
+	}
+
+	// This is the existing value; will be operated upon and become the final assignment
+	float flValue = 0.0f;
+	const char *szExistingValue = GetOuter()->GetContextValue( szKey );
+	if ( szExistingValue )
+		flValue = atof( szExistingValue );
+
+	// Do the operation based on what the character was
+	switch ( cOperator )
+	{
+		case '+':		flValue += flNewValue;	break;
+		case '-':		flValue -= flNewValue;	break;
+		case '*':		flValue *= flNewValue;	break;
+		case '/':		flValue /= flNewValue;	break;
+	}
+
+	Q_snprintf( szValue, sizeof( szValue ), "%f", flValue );
+
+	// Remove all trailing 0's from the float to maintain whole integers
+	int i;
+	for ( i = strlen( szValue ) - 1; szValue[i] == '0'; i-- )
+	{
+		szValue[i] = '\0';
+	}
+
+	// If there were only zeroes past the period, this is a whole number. Remove the period
+	if ( szValue[i] == '.' )
+		szValue[i] = '\0';
+
+	return UTIL_VarArgs( "%s:%s:%f", szKey, szValue, flDuration );
+}
+#endif
 
 
 //-----------------------------------------------------------------------------

@@ -354,6 +354,13 @@ private:
 
 	CSimpleSimTimer		m_FakeOutMortarTimer;
 
+#ifdef EZ2
+	// AI backplane port (mapbase, which guards this with #ifdef EZ). CNPC_Citizen
+	// inherits this declaration from here, so CNPC_Citizen::JustStartedFearing()
+	// can reach the expresser. The access specifier in force at this point is
+	// private, so protected: has to be restated.
+protected:
+#endif
 	// Derived classes should not use the expresser directly
 	virtual CAI_Expresser *GetExpresser()	{ return BaseClass::GetExpresser(); }
 

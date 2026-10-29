@@ -227,6 +227,18 @@ private:
 		NEXT_CONDITION
 	};
 
+#ifdef EZ2
+public:
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1). Upstream this returns the
+	// mapbase-only m_bDisablePlayerUse keyfield; M2 has no such keyfield, so the
+	// stub always reports "not disabled", which is the vanilla HL2 answer and
+	// the direction ez2_player.cpp's "can Bad Cop use this combine?" test
+	// expects. Add the keyfield with the mapbase combine work.
+	// (public: is repeated here on purpose -- the access specifier in force at
+	// this point in the class is private.)
+	bool			IsPlayerUseDisabled() { return false; };
+#endif
+
 private:
 	// Select the combat schedule
 	int SelectCombatSchedule();

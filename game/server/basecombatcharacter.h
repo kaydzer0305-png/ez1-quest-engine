@@ -154,9 +154,22 @@ public:
 	virtual bool		ShouldShootMissTarget( CBaseCombatCharacter *pAttacker );
 	virtual CBaseEntity *FindMissTarget( void );
 
-	// Do not call HandleInteraction directly, use DispatchInteraction
-	bool				DispatchInteraction( int interactionType, void *data, CBaseCombatCharacter* sourceEnt )	{ return ( interactionType > 0 ) ? HandleInteraction( interactionType, data, sourceEnt ) : false; }
-	virtual bool		HandleInteraction( int interactionType, void *data, CBaseCombatCharacter* sourceEnt );
+// Do not call HandleInteraction directly, use DispatchInteraction
+bool				DispatchInteraction( int interactionType, void *data, CBaseCombatCharacter* sourceEnt )	{ return ( interactionType > 0 ) ? HandleInteraction( interactionType, data, sourceEnt ) : false; }
+virtual bool		HandleInteraction( int interactionType, void *data, CBaseCombatCharacter* sourceEnt );
+#ifdef EZ2
+	// AI backplane port (mapbase). Hook for "a weapon was just added to my
+	// inventory"; EZ2's player overrides it to record xen-grenade/displacer
+	// pickups in its response contexts. The implementation is the same
+	// MAX_WEAPONS slot loop that Weapon_Equip() used to inline -- see the
+	// #ifdef in basecombatcharacter.cpp.
+	virtual void		Weapon_HandleEquip( CBaseCombatWeapon *pWeapon );
+
+	// AI backplane port (mapbase). Used by the player's speech AI to prevent
+	// enemies being picked up as D_FR before it could be apparent to the player
+	// that they are afraid. CNPC_Citizen overrides it (see npc_citizen17.h).
+	virtual bool		JustStartedFearing( CBaseEntity *pTarget ) { return false; }
+#endif
 
 	virtual QAngle		BodyAngles();
 	virtual Vector		BodyDirection2D( void );

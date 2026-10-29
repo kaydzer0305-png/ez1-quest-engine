@@ -278,3 +278,7 @@ BEGIN_VS_SHADER( UnlitTwoTexture_DX9, "Help for UnlitTwoTexture_DX9" )
 		}
 	}
 END_SHADER
+// Mapbase alias: see the note in lightmappedgeneric_dx9.cpp.
+BEGIN_INHERITED_SHADER( SDK_UnlitTwoTexture, UnlitTwoTexture_DX9, "Mapbase alias for UnlitTwoTexture_DX9" )
+END_INHERITED_SHADER
+

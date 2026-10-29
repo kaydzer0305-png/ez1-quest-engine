@@ -228,3 +228,7 @@ BEGIN_VS_SHADER( DecalModulate_dx9,
 		Draw( );
 	}
 END_SHADER
+
+// Mapbase alias: see the note in lightmappedgeneric_dx9.cpp.
+BEGIN_INHERITED_SHADER( SDK_DecalModulate, DecalModulate_dx9, "Mapbase alias for DecalModulate" )
+END_INHERITED_SHADER

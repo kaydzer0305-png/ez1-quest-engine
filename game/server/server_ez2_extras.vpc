@@ -1,0 +1,71 @@
+//-----------------------------------------------------------------------------
+// Entropy: Zero 2 profile on top of server_hl2.vpc. M2: wiring, the ez2vr convar
+// contract, and the player/weapon half of the EZ2 roster.
+//
+// Source: entropy-zero ez2/mapbase branch. The ez2vr_* convars are ours; they
+// are the native half of the contract the EZ2Launcher menu owns (see
+// EZ2Launcher/native/ and vr_defaults.cfg, whose defaults MUST match the
+// strings below).
+//-----------------------------------------------------------------------------
+$Macro SRCDIR		"..\.."
+
+// The waf VPC parser requires every parsed fragment to expose this section.
+// $AdditionalIncludeDirectories lets the ez2vr .cpp reach the shared header via
+// $SRCDIR\game\shared\ez2vr, matching the convention in server_hl2.vpc:17.
+// shared\ez2 is the husk base header the M3 roster includes as "ez2/...".
+$Configuration
+{
+	$AdditionalIncludeDirectories	"$BASE;$SRCDIR\game\shared\ez2vr;$SRCDIR\game\shared\ez2;.\ez2vr"
+}
+
+$Project "Server (Entropy Zero 2)"
+{
+	// Server-authoritative ez2vr_* registrations. Split from the client pair so
+	// no name is registered twice in one process — see ez2vr_cvars.h.
+	$Folder	"ez2vr"
+	{
+		$File	"ez2vr\ez2vr_cvars_server.cpp"
+	}
+
+	// M2: the player and its two EZ2-specific weapons, plus the command point.
+	$Folder	"ez2"
+	{
+		$File	"ez2\ez2_player.cpp"
+		$File	"ez2\weapon_oicw.cpp"
+		$File	"ez2\weapon_displacer_pistol.cpp"
+		$File	"ez2\prop_command_point.cpp"
+		$File	"ez2\ez2_backplane.cpp"
+	}
+
+	// M2: the minimal mapbase backplane ez2_player.cpp needs. Only
+	// info_remarkable is ported; the rest of mapbase/ is an M3+ concern and must
+	// not be copied wholesale (see TRANSPLANT-A §4.1).
+	$Folder	"mapbase"
+	{
+		$File	"mapbase\info_remarkable.cpp"
+	}
+
+	// NOT LISTED: the SLAM satchel (hl2\grenade_satchel.cpp and the hl2mp
+	// weapon_slam.cpp it needs). See the EZ2_SLAM_GRENADE note in
+	// ez2/ez2_player.cpp -- neither implementation can be linked into this DLL
+	// (hl2's is stale dead code, hl2mp's drags in CBaseHL2MPCombatWeapon), and
+	// server_hl2.vpc omits both because slams are episodic in vanilla HL2.
+	//
+	// NOT LISTED, M3: the unit roster. Do NOT add the files that
+	// server_ez1_extras.vpc already lists (ez2\npc_basepredator, npc_bullsquid,
+	// npc_zombigaunt). Those are not merely stale -- commits 3012d77e /
+	// d2f36b50 / 88c28d19 carry real Android-era compat shims (CLASS_ANTLION
+	// mapping, BLOOD_COLOR_* fallbacks, m_tEzVariant, StartHandGlow,
+	// ClawAttack). The Mapbase versions must win on .cpp AND .h together, then
+	// the shims get re-applied, or the roster mixes two Source eras and fails
+	// to link. Also M3: the Human_Error folder (hlss_weapon_id.h,
+	// vehicle_drivable_apc.cpp) and the mod folder.
+	//
+	// WARNING: this parser does not strip // comments. See
+	// scripts/waifulib/vpc_parser.py:115 -- the re.sub() result is discarded, so
+	// a disabled build directive is still parsed and compiled. Worse, the
+	// parser matches its directive names as bare substrings on any line, so even
+	// prose MENTIONING one is treated as a directive and then crashes on the
+	// missing quote. Describe omissions in words; never write the directive
+	// names here.
+}

@@ -14,8 +14,11 @@ class CPropCommandPoint : public CBaseAnimating
 public:
 	DECLARE_CLASS(CPropCommandPoint, CBaseAnimating );
 
+	virtual int	ObjectCaps( void ) { return BaseClass::ObjectCaps() & ~FCAP_ACROSS_TRANSITION; }
+
 	virtual void Spawn( void );
 	virtual void Precache( void );
+	virtual void OnRestore( void );
 };
 
 LINK_ENTITY_TO_CLASS( prop_command_point, CPropCommandPoint);
@@ -48,4 +51,15 @@ void CPropCommandPoint::Spawn( void )
 void CPropCommandPoint::Precache( void )
 {
 	BaseClass::Precache();
+}
+
+void CPropCommandPoint::OnRestore( void )
+{
+	BaseClass::OnRestore();
+
+	if (gpGlobals->eLoadType == MapLoad_Transition)
+	{
+		// Left behind after a level transition
+		UTIL_Remove( this );
+	}
 }

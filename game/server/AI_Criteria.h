@@ -26,6 +26,12 @@ public:
 	~AI_CriteriaSet();
 
 	void AppendCriteria( const char *criteria, const char *value = "", float weight = 1.0f );
+#ifdef EZ2
+	// AI backplane port (mapbase). Fold another set into this one, overwriting
+	// matching criteria. Used by the criteria-set Speak() path, where the
+	// caller's modifiers are tier 2 of a three-tier merge.
+	void MergeSet( const AI_CriteriaSet& src );
+#endif
 	void RemoveCriteria( const char *criteria );
 	
 	void Describe();
@@ -168,6 +174,25 @@ enum ResponseType_t
 	NUM_RESPONSES,
 };
 
+#ifdef EZ2
+// AI backplane port: Mapbase replaced the applyContextToWorld bool with a
+// flag-based integer so rules can also target squad and enemy. EZ2's talker
+// scripts use applyContextToSquad, and parsing them without these keywords
+// desyncs the response-rule parser.
+// Sites that mirror these flags:
+// CResponseSystem::ParseRule() - AI_ResponseSystem.cpp
+// AI_Response::Describe() - AI_Criteria.cpp
+// CAI_Expresser::SpeakDispatchResponse() - ai_speech.cpp
+enum
+{
+	APPLYCONTEXT_SELF = (1 << 0), // Included for contexts that apply to both self and something else
+	APPLYCONTEXT_WORLD = (1 << 1), // Apply to world
+
+	APPLYCONTEXT_SQUAD = (1 << 2), // Apply to squad
+	APPLYCONTEXT_ENEMY = (1 << 3), // Apply to enemy
+};
+#endif
+
 class AI_Response
 {
 public:
@@ -182,6 +207,13 @@ public:
 
 	void			GetName( char *buf, size_t buflen ) const;
 	void			GetResponse( char *buf, size_t buflen ) const;
+#ifdef EZ2
+	// AI backplane port: the name of the response rule that matched, for
+	// EZ2's speech system to feed into its own criteria. m_szMatchingRule was
+	// already declared, populated (AI_Response::Init) and networked here; only
+	// this accessor was missing.
+	void			GetRule( char *buf, size_t buflen ) const;
+#endif
 	const AI_ResponseParams *GetParams() const { return &m_Params; }
 	ResponseType_t	GetType() const { return (ResponseType_t)m_Type; }
 	soundlevel_t	GetSoundLevel() const;
@@ -197,19 +229,33 @@ public:
 	void			SetContext( const char *context );
 	const char *	GetContext( void ) const { return m_szContext; }
 
+#ifdef EZ2
+	int				GetContextFlags() { return m_iContextFlags; }
+	bool			IsApplyContextToWorld( void ) { return (m_iContextFlags & APPLYCONTEXT_WORLD) != 0; }
+#else
 	bool			IsApplyContextToWorld( void ) { return m_bApplyContextToWorld; }
+#endif
 
 	void Describe();
 
 	const AI_CriteriaSet* GetCriteria();
 
-	void	Init( ResponseType_t type, 
-				const char *responseName, 
-				const AI_CriteriaSet& criteria, 
+	void	Init( ResponseType_t type,
+				const char *responseName,
+				const AI_CriteriaSet& criteria,
 				const AI_ResponseParams& responseparams,
 				const char *matchingRule,
 				const char *applyContext,
 				bool bApplyContextToWorld );
+#ifdef EZ2
+	void	Init( ResponseType_t type,
+				const char *responseName,
+				const AI_CriteriaSet& criteria,
+				const AI_ResponseParams& responseparams,
+				const char *matchingRule,
+				const char *applyContext,
+				int iContextFlags );
+#endif
 
 	static const char *DescribeResponse( ResponseType_t type );
 
@@ -231,7 +277,11 @@ private:
 	AI_ResponseParams m_Params;
 
 	char *			m_szContext;
+#ifdef EZ2
+	int				m_iContextFlags;
+#else
 	bool			m_bApplyContextToWorld;
+#endif
 };
 
 #endif // AI_CRITERIA_H

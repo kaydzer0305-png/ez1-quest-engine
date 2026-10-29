@@ -43,6 +43,12 @@ struct backtrace_t
 
 #define Log(msg) __android_log_print(ANDROID_LOG_DEBUG, "SRCENG", "%s", msg); DebugLogger()->Write(msg);
 
+// Error() paths are not signals, so they never reach CrashHandler and used to
+// leave no trace at all beyond the message itself -- several boot failures on
+// this port were a bare "exit(255)" with zero output. INFO rather than DEBUG so
+// it lands in the same stream as Msg()/spew, which is what gets grepped.
+#define LogFatal(msg) __android_log_print(ANDROID_LOG_INFO, "SRCENG", "%s", msg)
+
 void printPC(void *pc)
 {
 	char message[4096];
@@ -55,7 +61,7 @@ void printPC(void *pc)
 	if( dladdr(pc, &info) <= 0 )
 	{
 		snprintf( message, sizeof(message), "0x%" PRIXPTR "\n", (uintptr_t)pc );
-		Log(message);
+		LogFatal(message);
 		return;
 	}
 
@@ -74,7 +80,7 @@ void printPC(void *pc)
 	uintptr_t relative_addr = (uintptr_t)pc - (uintptr_t)info.dli_fbase;
 
 	snprintf( message, sizeof(message), "0x%" PRIXPTR ":\t%s (base=0x%" PRIXPTR ", %s)\n", relative_addr, symbol, (uintptr_t)info.dli_fbase, fname );
-	Log(message);
+	LogFatal(message);
 }
 
 _Unwind_Reason_Code UnwindBacktraceCallback(struct _Unwind_Context* unwind_context, void* state_voidp)
@@ -88,6 +94,39 @@ _Unwind_Reason_Code UnwindBacktraceCallback(struct _Unwind_Context* unwind_conte
 		return _URC_END_OF_STACK;
 
 	return _URC_NO_REASON;
+}
+
+// Deep enough to name the container and its caller, shallow enough that a
+// runaway recursion does not produce a megabyte of logcat.
+#define MAX_FATAL_FRAMES 64
+
+// Exported by name so tier0's DumpFatalBacktrace can find it via dlsym
+// (RTLD_DEFAULT). Must be extern "C" -- dlsym looks up the literal
+// "EZQuestDumpBacktrace", which a C++-mangled name would never match -- and
+// default visibility, because the launcher links with hidden visibility.
+extern "C" __attribute__( ( visibility( "default" ) ) )
+void EZQuestDumpBacktrace(const char *reason)
+{
+	static backtrace_t bt;
+	char message[1024];
+
+	bt.count = 0;
+	_Unwind_Backtrace(UnwindBacktraceCallback, &bt);
+
+	LogFatal(">>> fatal backtrace begin\n");
+	snprintf(message, sizeof(message), "reason: %s\n", reason ? reason : "(none)");
+	LogFatal(message);
+
+	for (int i = 0; i < bt.count && i < MAX_FATAL_FRAMES; i++)
+	{
+		printPC((void *)bt.frames[i]);
+	}
+	if (bt.count > MAX_FATAL_FRAMES)
+	{
+		snprintf(message, sizeof(message), "... %d frames truncated\n", bt.count - MAX_FATAL_FRAMES);
+		LogFatal(message);
+	}
+	LogFatal(">>> fatal backtrace end\n");
 }
 
 static void CrashHandler( int sig, siginfo_t *si, void *uc)

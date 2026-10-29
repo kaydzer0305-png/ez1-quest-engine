@@ -267,6 +267,19 @@ public:
 	void StartWaterDeathSounds( void );
 	void StopWaterDeathSounds( void );
 
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1). Called by the EZ2
+	// grenade/detonatable code in ez2_player.cpp to keep the glow lists in step
+	// with the network counts in hl2_playerlocaldata.h.
+	void		OnDropSatchel( CBaseEntity *pSatchel );
+	void		OnSetupTripmine( CBaseEntity *pTripmine );
+	void		OnSetupDetonatable( CBaseEntity *pDetonatable );
+	void		OnSatchelExploded( CBaseEntity *pSatchel, CBaseEntity *pAttacker );
+	void		OnTripmineExploded( CBaseEntity *pTripmine, CBaseEntity *pAttacker );
+	void		OnDetonatableExploded( CBaseEntity *pDetonatable, CBaseEntity *pAttacker );
+	void		OnDetonatableDisabled( CBaseEntity *pDetonatable );
+#endif
+
 	bool IsWeaponLowered( void ) { return m_HL2Local.m_bWeaponLowered; }
 	void HandleArmorReduction( void );
 	void StartArmorReduction( void ) { m_flArmorReductionTime = gpGlobals->curtime + ARMOR_DECAY_TIME; 
@@ -283,6 +296,19 @@ public:
 
 	CSoundPatch *m_sndLeeches;
 	CSoundPatch *m_sndWaterSplashes;
+
+#ifdef EZ2
+public:
+	// AI backplane port. GetPlayerSquad() is just an accessor for m_pPlayerAISquad,
+	// which this class already owns and initialises; EZ2's response system needs
+	// to reach the player's squad without touching the member directly.
+	inline CAI_Squad	*GetPlayerSquad() { return m_pPlayerAISquad; }
+
+	// AI backplane port. Lets a derived player veto the "pick up ammo and
+	// switch to that weapon" behaviour; EZ2's player overrides this to hold off
+	// while his NPC component is in combat.
+	virtual bool		CanAutoSwitchToNextBestWeapon( CBaseCombatWeapon *pWeapon );
+#endif
 
 protected:
 	virtual void		PreThink( void );
@@ -329,6 +355,16 @@ private:
 	CSimpleSimTimer		m_CommanderUpdateTimer;
 	float				m_RealTimeLastSquadCommand;
 	CommanderCommand_t	m_QueuedCommand;
+
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1): the EZ2 SLAM/detonatable
+	// glow path. ez2_player.cpp owns CPointDetonatable and calls the On* hooks
+	// below; c_ez2_player.cpp mirrors these lists to draw the HUD glow. Guarded
+	// by EZ2, so no other profile sees them.
+	CUtlVector<CBaseEntity*>	m_hActiveSatchels;
+	CUtlVector<CBaseEntity*>	m_hActiveTripmines;
+	CUtlVector<CBaseEntity*>	m_hActiveDetonatables;
+#endif
 
 	Vector				m_vecMissPositions[16];
 	int					m_nNumMissPositions;
@@ -386,6 +422,19 @@ void CHL2_Player::DisableCappedPhysicsDamage()
 {
 	m_bUseCappedPhysicsDamageTable = false;
 }
+
+
+#ifdef EZ2
+// Minimal mapbase backplane (TRANSPLANT-A §4.1): the interaction handles the EZ2
+// player dispatches. Upstream declares the xen-grenade ones in mapbase's
+// grenade_hopwire.h and the bad-cop one next to hl2_player.cpp's surrender
+// setup; all four are defined in ez2/ez2_backplane.cpp. They live here, outside
+// the class, because ez2_player.cpp includes this header and is the M2 consumer.
+extern int	g_interactionBadCopOrderSurrender;
+extern int	g_interactionXenGrenadeConsume;
+extern int	g_interactionXenGrenadeRelease;
+extern int	g_interactionXenGrenadeHop;
+#endif
 
 
 #endif	//HL2_PLAYER_H

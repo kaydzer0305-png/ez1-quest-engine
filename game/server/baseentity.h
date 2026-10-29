@@ -120,6 +120,14 @@ enum Class_T
 	CLASS_EARTH_FAUNA,
 	CLASS_HACKED_ROLLERMINE,
 	CLASS_COMBINE_HUNTER,
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1). ez2_player.cpp tests
+	// targets for CLASS_COMBINE_HUSK. Upstream declares this inside its EZ
+	// block alongside six other EZ class values; only the husk one is needed
+	// for M2, and it must stay immediately before NUM_AI_CLASSES because both
+	// game DLLs number this enum from the same header.
+	CLASS_COMBINE_HUSK,
+#endif
 
 	NUM_AI_CLASSES
 };
@@ -846,8 +854,22 @@ protected:
 	const char *GetContextValue( int index ) const; 	// note: context may be expired
 	bool ContextExpired( int index ) const;
 	int FindContextByName( const char *name ) const;
-public:
+ public:
+#ifdef EZ2
+	// AI backplane port (mapbase). Look a response context up by name instead of
+	// index. Returns "" -- not NULL -- when absent, which is what the EZ2 speech
+	// code tests with FStrEq(szGag, "1") and friends. Public, as upstream: the
+	// response system reaches it off a plain CBaseEntity pointer.
+	const char *GetContextValue( const char *contextName ) const;
+#endif
 	void	AddContext( const char *nameandvalue );
+#ifdef EZ2
+	// AI backplane port (mapbase). Add/overwrite a response context by name, with
+	// an optional duration. The nameandvalue form above parses the
+	// "name,value,duration" string; this one is the explicit-argument overload
+	// the EZ2 speech system calls.
+	void	AddContext( const char *name, const char *value, float duration = 0.0f );
+#endif
 
 protected:
 	CUtlVector< ResponseContext_t > m_ResponseContexts;
@@ -933,6 +955,26 @@ public:
 	virtual char const		*DamageDecal( int bitsDamageType, int gameMaterial );
 	virtual void			DecalTrace( trace_t *pTrace, char const *decalName );
 	virtual void			ImpactTrace( trace_t *pTrace, int iDamageType, const char *pCustomImpactName = NULL );
+#ifdef EZ2
+	// Minimal mapbase backplane (TRANSPLANT-A §4.1): mapbase guards this hook
+	// with MAPBASE, and ez2_player.cpp calls it before dynamic_cast-ing to
+	// CInfoRemarkable. Only the EZ2 profile defines EZ2, so no other build sees
+	// this and the vtable layout of the hl2/ez1 DLLs is untouched.
+	virtual bool			IsRemarkable() { return false; }
+
+	// Same story: the displacer pistol refuses to displace an entity that says
+	// it cannot be displaced. Mapbase's default is "impossible" and the
+	// opt-out lives on CBaseAnimating (see baseanimating.h), so adding the
+	// virtual here is not enough on its own -- both halves are required.
+	virtual bool			IsDisplacementImpossible() { return true; }
+
+	// Mapbase moved the interaction pair up from CBaseCombatCharacter so that
+	// plain CBaseEntity pointers can dispatch. CBaseCombatCharacter's copies are
+	// left in place: they are virtual, so the derived declarations still
+	// override this pair and virtual dispatch reaches the same handlers.
+	bool				DispatchInteraction( int interactionType, void *data, CBaseCombatCharacter* sourceEnt )	{ return ( interactionType > 0 ) ? HandleInteraction( interactionType, data, sourceEnt ) : false; }
+	virtual bool		HandleInteraction( int interactionType, void *data, CBaseCombatCharacter* sourceEnt ) { return false; }
+#endif
 
 	void			AddPoints( int score, bool bAllowNegativeScore );
 	void			AddPointsToTeam( int score, bool bAllowNegativeScore );
@@ -1173,6 +1215,12 @@ public:
 #endif
 	virtual void	ModifyOrAppendCriteria( AI_CriteriaSet& set );
 	void			AppendContextToCriteria( AI_CriteriaSet& set, const char *prefix = "" );
+#ifdef EZ2
+	// AI backplane port (mapbase). Re-appends this entity's and the world's
+	// context criteria so that contexts can override criteria contributed by
+	// derived classes earlier in the merge. Backs the criteria-set Speak() path.
+	void			ReAppendContextCriteria( AI_CriteriaSet& set );
+#endif
 	void			DumpResponseCriteria( void );
 	
 private:

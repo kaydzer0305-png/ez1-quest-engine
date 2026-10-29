@@ -844,6 +844,25 @@ bool CServerGameDLL::GameInit( void )
 	ResetGlobalState();
 	engine->ServerCommand( "exec game.cfg\n" );
 	engine->ServerExecute( );
+
+#ifdef EZ2
+	// EZ2VR Quest posture: the Android launcher passes -mobile (see
+	// EZ2EngineActivity's EZ2_GAME_ARGS). The overlay ships
+	// cfg/ez2vr_mobile.cfg in the game search path; exec it every new game
+	// AFTER game.cfg so the Quest tuning wins over retail defaults, while
+	// per-map cfgs (exec'd later) still win over it.
+	//
+	// If the mobile cfg is absent from the search path the exec is a harmless
+	// console warning, which is exactly how a desktop launch without -mobile
+	// behaves. The CheckParm is not additionally #ifdef'd: without -mobile the
+	// block is simply skipped, so this also works for an hl2-profile build.
+	if ( CommandLine()->CheckParm( "-mobile" ) )
+	{
+		engine->ServerCommand( "exec ez2vr_mobile.cfg\n" );
+		engine->ServerExecute( );
+	}
+#endif
+
 	CBaseEntity::sm_bAccurateTriggerBboxChecks = true;
 
 	IGameEvent *event = gameeventmanager->CreateEvent( "game_init" );

@@ -87,18 +87,26 @@ struct EzVrEyeFrame
 // Engine render hook: draw the scene into every eye target. NULL restores
 // the built-in diagnostic scene. Called from the VR thread only.
 typedef void ( *EzVrRenderFn )( void *userdata, const EzVrEyeFrame *eyes, int eyeCount, double predictedDisplayTime );
+// Default visibility: the seam API resolves by name across DSOs (the engine
+// dlsyms what it needs out of liblauncher.so) and this tree builds
+// -fvisibility=hidden. See ezquest_vr_tracking.h.
+__attribute__( ( visibility( "default" ) ) )
 void EZQuestVrSetRenderHook( EzVrRenderFn fn, void *userdata );
 
 // Live session handle (XR_NULL_HANDLE until the session exists). The engine
 // uses this for action spaces / input later; do not destroy it here.
+__attribute__( ( visibility( "default" ) ) )
 XrSession EZQuestVrSession( void );
 
 // Head views as last located (views[0] = left, views[1] = right), plus the
 // reference space they are relative to. Returns 0 until the first locate.
+__attribute__( ( visibility( "default" ) ) )
 int EZQuestVrHeadViews( XrView outViews[2], XrSpace *outSpace );
 
 // Status accessors shared with the JNI bindings (vr_main.cpp).
+__attribute__( ( visibility( "default" ) ) )
 int EzVrStatus( void );
+__attribute__( ( visibility( "default" ) ) )
 const char *EzVrFailReason( void );
 
 // ---------------------------------------------------------------------------
