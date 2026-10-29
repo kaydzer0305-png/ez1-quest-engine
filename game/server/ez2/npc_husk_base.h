@@ -18,8 +18,12 @@
 #include "ai_senses.h"
 #include "ai_interactions.h"
 #include "saverestore_utlvector.h"
+#include "AI_Criteria.h"
 
 //-----------------------------------------------------------------------------
+
+extern int g_interactionHuskSuspicious;
+extern int g_interactionHuskAngry;
 
 // See npc_husk_base.cpp for cvar declarations
 extern ConVar sk_husk_common_reaction_time_multiplier;

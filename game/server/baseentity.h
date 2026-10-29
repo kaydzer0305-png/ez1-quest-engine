@@ -862,6 +862,7 @@ protected:
 	// code tests with FStrEq(szGag, "1") and friends. Public, as upstream: the
 	// response system reaches it off a plain CBaseEntity pointer.
 	const char *GetContextValue( const char *contextName ) const;
+	bool HasContext( const char *name, const char *value = NULL ) const;
 #endif
 	void	AddContext( const char *nameandvalue );
 #ifdef EZ2
