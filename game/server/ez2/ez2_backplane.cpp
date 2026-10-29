@@ -20,10 +20,19 @@
 //=============================================================================//
 
 #include "cbase.h"
+#include "hl2/grenade_spit.h"
 
-int	g_interactionXenGrenadeConsume		= 0;
+int	g_interactionXenGrenadeConsume	= 0;
 int	g_interactionXenGrenadeRelease	= 0;
 int	g_interactionXenGrenadeHop		= 0;
+int	g_interactionXenGrenadeCreate	= 0;
+
+// EZ2 calls this for a large Bullsquid projectile. The Android grenade-spit
+// implementation already spawns with the large model and full damage, so the
+// compatibility implementation intentionally has no additional work.
+void CGrenadeSpit::SetSpitSize( int nSize )
+{
+}
 
 // Upstream this one lives in mapbase's hl2_player.cpp, next to the bad-cop
 // order-surrender interaction setup. Same reasoning as above: zero is upstream's

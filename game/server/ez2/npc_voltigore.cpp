@@ -446,18 +446,18 @@ int CNPC_Voltigore::RangeAttack1Conditions( float flDot, float flDist )
 // Translate missing activities to custom ones
 //=========================================================
 // Shared activities from base predator
-extern int ACT_EAT;
-extern int ACT_EXCITED;
-extern int ACT_DETECT_SCENT;
-extern int ACT_INSPECT_FLOOR;
+extern int ACT_SQUID_EAT;
+extern int ACT_SQUID_EXCITED;
+extern int ACT_SQUID_DETECT_SCENT;
+extern int ACT_SQUID_INSPECT_FLOOR;
 
 Activity CNPC_Voltigore::NPC_TranslateActivity( Activity eNewActivity )
 {
-	if (eNewActivity == ACT_EAT)
+	if (eNewActivity == ACT_SQUID_EAT)
 	{
 		return (Activity)ACT_VICTORY_DANCE;
 	}
-	else if (eNewActivity == ACT_EXCITED)
+	else if (eNewActivity == ACT_SQUID_EXCITED)
 	{
 		return (Activity) ACT_IDLE;
 	}
@@ -465,9 +465,9 @@ Activity CNPC_Voltigore::NPC_TranslateActivity( Activity eNewActivity )
 	{
 		return (Activity) ACT_BIG_FLINCH;
 	}
-	else if (eNewActivity == ACT_DETECT_SCENT)
+	else if (eNewActivity == ACT_SQUID_DETECT_SCENT)
 	{
-		return (Activity) ACT_INSPECT_FLOOR;
+		return (Activity) ACT_SQUID_INSPECT_FLOOR;
 	}
 
 	return BaseClass::NPC_TranslateActivity( eNewActivity );
