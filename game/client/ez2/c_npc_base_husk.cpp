@@ -22,8 +22,8 @@
 HUSK_CLIENT_STUB( Soldier, C_AI_BaseNPC, npc_husk_soldier )
 HUSK_CLIENT_STUB( Police, C_AI_BaseNPC, npc_husk_police )
 HUSK_CLIENT_STUB( Strider, C_AI_BaseNPC, npc_husk_strider )
-HUSK_CLIENT_STUB( CrabSynth, C_AI_BaseNPC, npc_husk_crabsynth )
-HUSK_CLIENT_STUB( MortarSynth, C_AI_BaseNPC, npc_husk_mortarsynth )
+//HUSK_CLIENT_STUB( CrabSynth, C_AI_BaseNPC, npc_husk_crabsynth )
+//HUSK_CLIENT_STUB( MortarSynth, C_AI_BaseNPC, npc_husk_mortarsynth )
 //HUSK_CLIENT_STUB( ClawScanner, C_AI_BaseNPC, npc_husk_clawscanner )
 
 //-----------------------------------------------------------------------------
