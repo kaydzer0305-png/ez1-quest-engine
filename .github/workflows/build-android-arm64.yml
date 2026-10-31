@@ -10,6 +10,10 @@ on:
         description: 'waf --build-games value (manual builds default to hl2; pull requests validate ez1)'
         required: false
         default: 'hl2'
+      game_profile:
+        description: 'APK manifest GAME_PROFILE. Leave hl2 until /sdcard/srceng/ez1 exists; ez1 is the content flip.'
+        required: false
+        default: 'hl2'
 
 permissions:
   contents: read
@@ -115,6 +119,40 @@ jobs:
           echo "libc++_shared found at: $LIBCXX"
           cp "$LIBCXX" apk/lib/arm64-v8a/
           ls -la apk/lib/arm64-v8a
+
+      - name: Apply manifest game profile
+        env:
+          GAME_PROFILE: ${{ github.event.inputs.game_profile }}
+        run: |
+          set -euo pipefail
+          PROFILE="${GAME_PROFILE:-hl2}"
+          if [ -z "$PROFILE" ]; then PROFILE=hl2; fi
+          case "$PROFILE" in
+            hl2|ez1) ;;
+            *) echo "game_profile must be hl2 or ez1 (got '$PROFILE')" >&2; exit 1 ;;
+          esac
+          python3 - "$PROFILE" << 'PY'
+          import pathlib, sys
+          profile = sys.argv[1]
+          path = pathlib.Path("android/manifest/AndroidManifest.xml")
+          text = path.read_text()
+          needle = 'android:name="com.ezquest.engine.GAME_PROFILE"'
+          idx = text.find(needle)
+          if idx < 0:
+              raise SystemExit("GAME_PROFILE meta-data missing")
+          value_token = 'android:value="'
+          value_at = text.find(value_token, idx)
+          if value_at < 0 or value_at - idx > 200:
+              raise SystemExit("GAME_PROFILE value attribute missing")
+          end = text.find('"', value_at + len(value_token))
+          current = text[value_at + len(value_token):end]
+          if current not in ("hl2", "ez1"):
+              raise SystemExit("unexpected committed GAME_PROFILE %r" % (current,))
+          if current != profile:
+              text = text[:value_at + len(value_token)] + profile + text[end:]
+              path.write_text(text)
+          print("manifest GAME_PROFILE=%s (committed default stays hl2)" % profile)
+          PY
 
       - name: Package APK
         run: |

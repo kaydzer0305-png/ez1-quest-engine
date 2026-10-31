@@ -10,6 +10,13 @@
 #include "npc_metropolice.h"
 #include "weapon_stunstick.h"
 #include "IEffects.h"
+#include "in_buttons.h"
+#include "soundent.h"
+#include "rumble_shared.h"
+#include "gamestats.h"
+#ifdef EZ
+#include "RagdollBoogie.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -25,6 +32,9 @@ extern ConVar metropolice_move_and_melee;
 
 IMPLEMENT_SERVERCLASS_ST(CWeaponStunStick, DT_WeaponStunStick)
 	SendPropInt( SENDINFO( m_bActive ), 1, SPROP_UNSIGNED ),
+#ifdef EZ
+	SendPropInt( SENDINFO( m_bInSwing ), 1, SPROP_UNSIGNED ),
+#endif
 END_SEND_TABLE()
 
 #ifndef HL2MP
@@ -44,6 +54,10 @@ IMPLEMENT_ACTTABLE(CWeaponStunStick);
 BEGIN_DATADESC( CWeaponStunStick )
 
 	DEFINE_FIELD( m_bActive, FIELD_BOOLEAN ),
+#ifdef EZ
+	DEFINE_FIELD( m_flLastChargeTime, FIELD_TIME ),
+	DEFINE_FIELD( m_flChargeAmount, FIELD_FLOAT ),
+#endif
 
 END_DATADESC()
 
@@ -57,6 +71,11 @@ CWeaponStunStick::CWeaponStunStick( void )
 	// HACK:  Don't call SetStunState because this tried to Emit a sound before
 	//  any players are connected which is a bug
 	m_bActive = false;
+#ifdef EZ
+	m_bInSwing = false;
+	m_flLastChargeTime = 0.0f;
+	m_flChargeAmount = 0.0f;
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -86,11 +105,121 @@ void CWeaponStunStick::Precache()
 //-----------------------------------------------------------------------------
 float CWeaponStunStick::GetDamageForActivity( Activity hitActivity )
 {
+	float flDamage;
 	if ( ( GetOwner() != NULL ) && ( GetOwner()->IsPlayer() ) )
-		return sk_plr_dmg_stunstick.GetFloat();
-	
-	return sk_npc_dmg_stunstick.GetFloat();
+		flDamage = sk_plr_dmg_stunstick.GetFloat();
+	else
+		flDamage = sk_npc_dmg_stunstick.GetFloat();
+
+#ifdef EZ
+	// EZ charged stunstick: damage = base * clamp(1.5 * charge^2, 1, 100).
+	// A full 3 second hold is the 100x ceiling. Uncharged swings stay at 1x.
+	const float flChargeMultiplier = MIN( MAX( (m_flChargeAmount * m_flChargeAmount) * 1.5f, 1.0f ), 100.0f );
+	flDamage *= flChargeMultiplier;
+#endif
+	return flDamage;
 }
+
+#ifdef EZ
+void CWeaponStunStick::PrimaryAttack( void )
+{
+	BaseClass::PrimaryAttack();
+	m_flChargeAmount = 0.0f;
+	m_flLastChargeTime = 0.0f;
+}
+
+void CWeaponStunStick::ItemPostFrame( void )
+{
+	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
+	if ( pOwner && m_flChargeAmount > 0.0f &&
+		( !( pOwner->m_nButtons & IN_ATTACK2 ) ||
+		  ( pOwner->m_nButtons & IN_ATTACK ) ||
+		  m_flChargeAmount > 3.0f ) )
+	{
+		if ( m_flNextPrimaryAttack <= gpGlobals->curtime )
+		{
+			PrimaryAttack();
+		}
+		else
+		{
+			m_flChargeAmount = 0.0f;
+			m_flLastChargeTime = 0.0f;
+		}
+	}
+
+	BaseClass::ItemPostFrame();
+	m_bInSwing = InSwing();
+}
+
+void CWeaponStunStick::SecondaryAttack( void )
+{
+	if ( m_flLastChargeTime > 0.0f )
+	{
+		m_flChargeAmount += gpGlobals->curtime - m_flLastChargeTime;
+	}
+	else
+	{
+		WeaponSound( SPECIAL1 );
+	}
+	m_flLastChargeTime = gpGlobals->curtime;
+}
+
+bool CWeaponStunStick::InSwing( void )
+{
+	return m_flChargeAmount > 0.0f;
+}
+
+void CWeaponStunStick::Hit( trace_t &traceHit, Activity nHitActivity, bool bIsSecondary )
+{
+	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( !pPlayer )
+		return;
+
+	AddViewKick();
+	CSoundEnt::InsertSound( SOUND_BULLET_IMPACT, traceHit.endpos, 400, 0.2f, pPlayer );
+	pPlayer->RumbleEffect( RUMBLE_AR2, 0, RUMBLE_FLAG_RESTART );
+
+	CBaseEntity *pHitEntity = traceHit.m_pEnt;
+	if ( pHitEntity != NULL )
+	{
+		Vector hitDirection;
+		pPlayer->EyeVectors( &hitDirection, NULL, NULL );
+		VectorNormalize( hitDirection );
+
+		const float flDamage = GetDamageForActivity( nHitActivity );
+		CTakeDamageInfo info( GetOwner(), GetOwner(), flDamage, DMG_CLUB );
+		if ( pHitEntity->IsNPC() )
+		{
+			info.AdjustPlayerDamageInflictedForSkillLevel();
+		}
+		CalculateMeleeDamageForce( &info, hitDirection, traceHit.endpos );
+
+		// Charged blows that would kill an NPC electrify the ragdoll. The
+		// uncharged path is the same dispatch the bludgeon base uses.
+		CAI_BaseNPC *pNPC = pHitEntity->MyNPCPointer();
+		const float flUnscaled = sk_plr_dmg_stunstick.GetFloat();
+		if ( flDamage > flUnscaled && pNPC && pNPC->CanBecomeServerRagdoll() &&
+			 !pNPC->IsEFlagSet( EFL_NO_MEGAPHYSCANNON_RAGDOLL ) &&
+			 pNPC->m_iHealth - info.GetDamage() <= 0.0f )
+		{
+			pNPC->BecomeRagdollBoogie( GetOwner(), info.GetDamageForce(), 5.0f, SF_RAGDOLL_BOOGIE_ELECTRICAL );
+		}
+		else
+		{
+			pHitEntity->DispatchTraceAttack( info, hitDirection, &traceHit );
+			ApplyMultiDamage();
+		}
+
+		TraceAttackToTriggers( info, traceHit.startpos, traceHit.endpos, hitDirection );
+		if ( ToBaseCombatCharacter( pHitEntity ) )
+		{
+			gamestats->Event_WeaponHit( pPlayer, !bIsSecondary, GetClassname(), info );
+		}
+	}
+
+	ImpactEffect( traceHit );
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Attempt to lead the target (needed because citizens can't hit manhacks with the crowbar!)
@@ -217,6 +346,13 @@ void CWeaponStunStick::Operator_HandleAnimEvent( animevent_t *pEvent, CBaseComba
 			if ( pHurt )
 			{
 				// play sound
+#ifdef EZ
+				// Charged NPC swings (metro cops) use the alternate hit sound.
+				// Player swings play their sound from the bludgeon base.
+				if ( m_flChargeAmount > 1.0f )
+					WeaponSound( SPECIAL2 );
+				else
+#endif
 				WeaponSound( MELEE_HIT );
 
 				CBasePlayer *pPlayer = ToBasePlayer( pHurt );

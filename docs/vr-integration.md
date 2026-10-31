@@ -86,7 +86,7 @@ Remaining work:
    `submit eye=0/1 via bound RT … (slice H2)`. Expect true IPD stereo
    once the HL2 client VR view loop is running (`UseVR()` + `PostProcessFrame`).
 2. Confirm `EZQuest-VR-FFR: FFR level=2 applied to 2/2 eyes` and 90 Hz.
-3. Merge Entropy: Zero 1 `#ifdef EZ` hunks once HL2 presents in-headset.
+3. Headset-check the EZ charged stunstick and commandable Combine follow once HL2 presents in-headset. The code-side hunks are in tree; see `docs/ez1-merge.md`.
 
 ## Build
 

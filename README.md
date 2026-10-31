@@ -26,15 +26,18 @@ Current status:
 - ✅ EZ1 build profile (`--build-games=ez1`) + Bad Cop Touch extras (kick / NV / manhack).
 - ✅ EZ1 extra VPC lists + import script for EZ1v4.0 unique units.
 - ✅ Quest FFR + 90 Hz request (`EZQUEST_VR_FFR`, `EZQUEST_VR_REFRESH`).
-- ✅ Phase 1b `#ifdef EZ` allegiance / NV / bleed / metro glow hunks (CI still `hl2`).
-- ✅ EZ1v4.0 unique units imported under `game/server/{ez1,ez2,mod,Human_Error}` (CI still `hl2`).
-- 🔬 Remaining: headset-verify stereo/input/FFR (see `docs/headset-verify.md`), stunstick+combine leftover hunks, then `GAME_PROFILE=ez1`.
+- ✅ Phase 1b `#ifdef EZ` allegiance / NV / bleed / metro glow hunks.
+- ✅ EZ1v4.0 unique units imported under `game/server/{ez1,ez2,mod,Human_Error}`.
+- ✅ Pull-request CI configures and links `--build-games=ez1`. Manual `build-android-arm64` still defaults to `hl2`.
+- ✅ EZ charged stunstick (server `hl2/weapon_stunstick` + client `c_weapon_stunstick`, the units the ez1 profile compiles).
+- ✅ EZ1 Combine ally-squad (commandable follow / orders) on the existing soldier, guarded with `EZ1` so the ez2 husk build is unchanged.
+- 🔬 Remaining: headset-verify stereo/input/FFR and the new stunstick/squad behavior (see `docs/headset-verify.md`). `GAME_PROFILE` stays `hl2` until `/sdcard/srceng/ez1` is on the headset.
 
 ## Roadmap
 
 1. Headset-verify HL2 **in-headset stereo** (H1/H2 logcat + IPD check). See `docs/headset-verify.md`.
-2. Merge leftover `#ifdef EZ` hunks (stunstick charge, Combine Mapbase ally-squad).
-3. Flip `com.ezquest.engine.GAME_PROFILE` to `ez1` once `/sdcard/srceng/ez1` exists.
+2. Headset-verify EZ charged stunstick and commandable Combine follow (same checklist).
+3. Flip `com.ezquest.engine.GAME_PROFILE` to `ez1` once `/sdcard/srceng/ez1` exists (one manifest value, or dispatch `game_profile=ez1`).
 4. Tune FFR level / `EZQUEST_XR_RES_SCALE` on-device.
 
 ## How we build

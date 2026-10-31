@@ -26,7 +26,15 @@
 #define SF_COMBINE_NO_LOOK	(1 << 16)
 #define SF_COMBINE_NO_GRENADEDROP ( 1 << 17 )
 #define SF_COMBINE_NO_AR2DROP ( 1 << 18 )
+#ifdef EZ1
+// EZ1 FGD layout: bit 19 is the commandable squad flag. Regen moves to bit 20
+// so maps built with the EZ1 soldier spawnflags keep their meaning. The hl2
+// and ez2 profiles keep regen on bit 19 and do not grow a commandable flag.
+#define SF_COMBINE_COMMANDABLE ( 1 << 19 )
+#define SF_COMBINE_REGENERATE ( 1 << 20 )
+#else
 #define SF_COMBINE_REGENERATE ( 1 << 19 )
+#endif
 
 //=========================================================
 //	>> CNPC_Combine
@@ -71,6 +79,45 @@ public:
 	void InputAssault( inputdata_t &inputdata );
 	void InputHitByBugbait( inputdata_t &inputdata );
 	void InputThrowGrenadeAtTarget( inputdata_t &inputdata );
+
+#ifdef EZ1
+	// Ally-squad surface from EZ1v4.0, kept on CAI_BaseActor. The official
+	// soldier inherits CNPC_PlayerCompanion; this tree cannot, because the
+	// ez2 profile compiles the same class for husks and the companion base
+	// here does not own the squad API. These overrides use the squad hooks
+	// already on CAI_BaseNPC plus the follow behavior this class already has.
+	void			Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
+	void			InputSetCommandable( inputdata_t &inputdata );
+	void			InputSetNonCommandable( inputdata_t &inputdata );
+	void			InputRemoveFromPlayerSquad( inputdata_t &inputdata );
+	void			InputAddToPlayerSquad( inputdata_t &inputdata );
+
+	virtual bool	IsCommandable( void );
+	virtual bool	IsPlayerAlly( CBasePlayer *pPlayer = NULL );
+	virtual bool	ShouldAlwaysThink( void );
+	virtual CAI_BaseNPC *GetSquadCommandRepresentative( void );
+	virtual bool	TargetOrder( CBaseEntity *pTarget, CAI_BaseNPC **Allies, int numAllies );
+	virtual void	MoveOrder( const Vector &vecDest, CAI_BaseNPC **Allies, int numAllies );
+	virtual Disposition_t IRelationType( CBaseEntity *pTarget );
+	virtual int		IRelationPriority( CBaseEntity *pTarget );
+	virtual bool	FValidateHintType( CAI_Hint *pHint );
+
+	void			ClearFollowTarget( void );
+	void			AddToPlayerSquad( void );
+	void			RemoveFromPlayerSquad( void );
+	void			FixupPlayerSquad( void );
+	void			GetSquadGoal( void );
+	void			ToggleSquadCommand( void );
+	void			FollowSound( void );
+	void			StopFollowSound( void );
+	bool			HaveCommandGoal( void ) const;
+	bool			IsFollowingCommandPoint( void );
+	void			UpdateFollowCommandPoint( void );
+	bool			ShouldDeferToFollowBehavior( void );
+
+	COutputEvent	m_OnPlayerUse;
+	COutputEvent	m_OnFollowOrder;
+#endif
 
 	bool			UpdateEnemyMemory( CBaseEntity *pEnemy, const Vector &position, CBaseEntity *pInformer = NULL );
 
@@ -271,6 +318,19 @@ protected:
 		}
 	};
 
+#ifdef EZ1
+	// Follow behavior that still lets a squad soldier take a special attack
+	// (energy ball, grenade) instead of only pathing after Bad Cop.
+	class CCombineFollowBehavior : public CAI_FollowBehavior
+	{
+		DECLARE_CLASS( CCombineFollowBehavior, CAI_FollowBehavior );
+
+		virtual int SelectSchedule( void );
+
+		inline CNPC_Combine *GetOuterS( void ) { return static_cast<CNPC_Combine *>( GetOuter() ); }
+	};
+#endif
+
 	// Rappel
 	virtual bool IsWaitingToRappel( void ) { return m_RappelBehavior.IsWaitingToRappel(); }
 	void BeginRappel() { m_RappelBehavior.BeginRappel(); }
@@ -281,6 +341,9 @@ private:
 	EHANDLE			m_hForcedGrenadeTarget;
 	bool			m_bShouldPatrol;
 	bool			m_bFirstEncounter;// only put on the handsign show in the squad's first encounter.
+#ifdef EZ1
+	string_t		m_iszOriginalSquad;
+#endif
 
 	// Time Variables
 	float			m_flNextPainSoundTime;
@@ -298,7 +361,11 @@ private:
  
 	CAI_AssaultBehavior			m_AssaultBehavior;
 	CCombineStandoffBehavior	m_StandoffBehavior;
+#ifdef EZ1
+	CCombineFollowBehavior		m_FollowBehavior;
+#else
 	CAI_FollowBehavior			m_FollowBehavior;
+#endif
 	CAI_FuncTankBehavior		m_FuncTankBehavior;
 	CAI_RappelBehavior			m_RappelBehavior;
 	CAI_ActBusyBehavior			m_ActBusyBehavior;

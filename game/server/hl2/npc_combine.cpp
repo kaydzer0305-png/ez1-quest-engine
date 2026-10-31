@@ -29,6 +29,8 @@
 #include "weapon_physcannon.h"
 #include "SoundEmitterSystem/isoundemittersystembase.h"
 #include "npc_headcrab.h"
+#include "ai_hint.h"
+#include "soundent.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -171,6 +173,17 @@ DEFINE_INPUTFUNC( FIELD_VOID,	"HitByBugbait",		InputHitByBugbait ),
 
 DEFINE_INPUTFUNC( FIELD_STRING,	"ThrowGrenadeAtTarget",	InputThrowGrenadeAtTarget ),
 
+#ifdef EZ1
+DEFINE_INPUTFUNC( FIELD_STRING, "SetCommandable", InputSetCommandable ),
+DEFINE_INPUTFUNC( FIELD_STRING, "SetNonCommandable", InputSetNonCommandable ),
+DEFINE_INPUTFUNC( FIELD_VOID, "RemoveFromPlayerSquad", InputRemoveFromPlayerSquad ),
+DEFINE_INPUTFUNC( FIELD_VOID, "AddToPlayerSquad", InputAddToPlayerSquad ),
+DEFINE_USEFUNC( Use ),
+DEFINE_OUTPUT( m_OnPlayerUse, "OnPlayerUse" ),
+DEFINE_OUTPUT( m_OnFollowOrder, "OnFollowOrder" ),
+DEFINE_FIELD( m_iszOriginalSquad, FIELD_STRING ),
+#endif
+
 DEFINE_FIELD( m_iLastAnimEventHandled, FIELD_INTEGER ),
 DEFINE_FIELD( m_fIsElite, FIELD_BOOLEAN ),
 DEFINE_FIELD( m_vecAltFireTarget, FIELD_VECTOR ),
@@ -286,6 +299,10 @@ void CNPC_Combine::Precache()
 	PrecacheScriptSound( "NPC_Combine.GrenadeLaunch" );
 	PrecacheScriptSound( "NPC_Combine.WeaponBash" );
 	PrecacheScriptSound( "Weapon_CombineGuard.Special1" );
+#ifdef EZ1
+	PrecacheScriptSound( "NPC_Combine.Following" );
+	PrecacheScriptSound( "NPC_Combine.StopFollowing" );
+#endif
 
 	BaseClass::Precache();
 }
@@ -351,8 +368,322 @@ void CNPC_Combine::Spawn( void )
 
 	m_flNextAltFireTime = gpGlobals->curtime;
 
+#ifdef EZ1
+	m_iszOriginalSquad = m_SquadName;
+#endif
+
 	NPCInit();
+
+#ifdef EZ1
+	if ( IsCommandable() )
+	{
+		SetUse( &CNPC_Combine::Use );
+	}
+#endif
 }
+
+#ifdef EZ1
+void CNPC_Combine::ClearFollowTarget( void )
+{
+	m_FollowBehavior.SetFollowTarget( NULL );
+	m_FollowBehavior.SetParameters( AIF_SIMPLE );
+}
+
+void CNPC_Combine::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
+{
+	(void)useType;
+	(void)value;
+	m_OnPlayerUse.FireOutput( pActivator, pCaller );
+
+	if ( pActivator == UTIL_GetLocalPlayer() && IsCommandable() )
+	{
+		if ( IsInPlayerSquad() )
+		{
+			StopFollowSound();
+			RemoveFromPlayerSquad();
+		}
+		else
+		{
+			AddLookTarget( pActivator, 0.75f, 3.0f );
+			FollowSound();
+			AddToPlayerSquad();
+		}
+	}
+}
+
+bool CNPC_Combine::IsCommandable( void )
+{
+	return HasSpawnFlags( SF_COMBINE_COMMANDABLE ) || BaseClass::IsCommandable();
+}
+
+bool CNPC_Combine::IsPlayerAlly( CBasePlayer *pPlayer )
+{
+	return IsCommandable() || BaseClass::IsPlayerAlly( pPlayer );
+}
+
+bool CNPC_Combine::ShouldAlwaysThink( void )
+{
+	return IsCommandable() || BaseClass::ShouldAlwaysThink();
+}
+
+CAI_BaseNPC *CNPC_Combine::GetSquadCommandRepresentative( void )
+{
+	if ( !AI_IsSinglePlayer() || !IsInPlayerSquad() || !m_pSquad )
+		return NULL;
+
+	AISquadIter_t iter;
+	for ( CAI_BaseNPC *pAlly = m_pSquad->GetFirstMember( &iter ); pAlly; pAlly = m_pSquad->GetNextMember( &iter ) )
+	{
+		if ( pAlly == this || !pAlly->IsCommandable() )
+			continue;
+		// Citizens already implement the squad HUD representative. Prefer them
+		// when a mixed squad exists so we don't recurse through soldiers.
+		if ( dynamic_cast<CNPC_Combine *>( pAlly ) == NULL )
+			return pAlly->GetSquadCommandRepresentative();
+	}
+
+	return IsCommandable() ? this : NULL;
+}
+
+bool CNPC_Combine::HaveCommandGoal( void ) const
+{
+	return GetCommandGoal() != vec3_invalid;
+}
+
+bool CNPC_Combine::TargetOrder( CBaseEntity *pTarget, CAI_BaseNPC **Allies, int numAllies )
+{
+	(void)Allies;
+	(void)numAllies;
+	if ( pTarget && pTarget->IsPlayer() )
+	{
+		ToggleSquadCommand();
+	}
+	return true;
+}
+
+void CNPC_Combine::MoveOrder( const Vector &vecDest, CAI_BaseNPC **Allies, int numAllies )
+{
+	(void)Allies;
+	(void)numAllies;
+	if ( m_StandoffBehavior.IsRunning() )
+	{
+		m_StandoffBehavior.SetStandoffGoalPosition( vecDest );
+	}
+
+	if ( m_AssaultBehavior.HasHitRallyPoint() && !m_AssaultBehavior.HasHitAssaultPoint() )
+	{
+		m_AssaultBehavior.Disable();
+		ClearSchedule( "Moving from rally point to assault point" );
+	}
+
+	m_FollowBehavior.SetFollowTarget( NULL );
+	SetCommandGoal( vecDest );
+	OnMoveOrder();
+}
+
+void CNPC_Combine::ToggleSquadCommand( void )
+{
+	CBasePlayer *pPlayer = UTIL_GetLocalPlayer();
+	if ( IsInPlayerSquad() && m_FollowBehavior.GetFollowTarget() != pPlayer )
+	{
+		ClearFollowTarget();
+		SetCommandGoal( vec3_invalid );
+		m_AssaultBehavior.Disable();
+		m_FollowBehavior.SetFollowTarget( pPlayer );
+		m_FollowBehavior.SetParameters( AIF_SIMPLE );
+		m_OnFollowOrder.FireOutput( this, this );
+	}
+	else
+	{
+		m_FollowBehavior.SetFollowTarget( NULL );
+	}
+}
+
+void CNPC_Combine::FollowSound( void )
+{
+	m_Sentences.Speak( "COMBINE_EZ2_FOLLOWING", SENTENCE_PRIORITY_INVALID, SENTENCE_CRITERIA_ALWAYS );
+}
+
+void CNPC_Combine::StopFollowSound( void )
+{
+	m_Sentences.Speak( "COMBINE_EZ2_STOPFOLLOWING", SENTENCE_PRIORITY_INVALID, SENTENCE_CRITERIA_ALWAYS );
+}
+
+void CNPC_Combine::AddToPlayerSquad( void )
+{
+	m_iszOriginalSquad = m_SquadName;
+	AddToSquad( AllocPooledString( PLAYER_SQUADNAME ) );
+	FixupPlayerSquad();
+}
+
+void CNPC_Combine::FixupPlayerSquad( void )
+{
+	GetSquadGoal();
+	if ( HaveCommandGoal() )
+		return;
+	ToggleSquadCommand();
+}
+
+void CNPC_Combine::GetSquadGoal( void )
+{
+	CAI_Squad *pPlayerSquad = g_AI_SquadManager.FindSquad( MAKE_STRING( PLAYER_SQUADNAME ) );
+	if ( !pPlayerSquad )
+		return;
+
+	AISquadIter_t iter;
+	for ( CAI_BaseNPC *pMember = pPlayerSquad->GetFirstMember( &iter ); pMember; pMember = pPlayerSquad->GetNextMember( &iter ) )
+	{
+		if ( pMember->GetCommandGoal() != vec3_invalid )
+		{
+			SetCommandGoal( pMember->GetCommandGoal() );
+			return;
+		}
+	}
+}
+
+void CNPC_Combine::RemoveFromPlayerSquad( void )
+{
+	if ( m_iszOriginalSquad != NULL_STRING && strcmp( STRING( m_iszOriginalSquad ), PLAYER_SQUADNAME ) != 0 )
+		AddToSquad( m_iszOriginalSquad );
+	else
+		RemoveFromSquad();
+
+	SetCommandGoal( vec3_invalid );
+	ToggleSquadCommand();
+}
+
+bool CNPC_Combine::IsFollowingCommandPoint( void )
+{
+	CBaseEntity *pFollowTarget = m_FollowBehavior.GetFollowTarget();
+	if ( !pFollowTarget )
+		return false;
+	return FClassnameIs( pFollowTarget, "info_target_command_point" );
+}
+
+void CNPC_Combine::UpdateFollowCommandPoint( void )
+{
+	if ( !AI_IsSinglePlayer() )
+		return;
+
+	if ( IsInPlayerSquad() )
+	{
+		if ( HaveCommandGoal() )
+		{
+			CBaseEntity *pFollowTarget = m_FollowBehavior.GetFollowTarget();
+			CBaseEntity *pCommandPoint = gEntList.FindEntityByClassname( NULL, "info_target_command_point" );
+			if ( !pCommandPoint )
+			{
+				pCommandPoint = CreateEntityByName( "info_target_command_point" );
+			}
+
+			if ( pCommandPoint && pFollowTarget != pCommandPoint )
+			{
+				m_FollowBehavior.SetFollowTarget( pCommandPoint );
+				m_FollowBehavior.SetParameters( AIF_COMMANDER );
+			}
+
+			if ( pCommandPoint && ( pCommandPoint->GetAbsOrigin() - GetCommandGoal() ).LengthSqr() > 0.01f )
+			{
+				UTIL_SetOrigin( pCommandPoint, GetCommandGoal(), false );
+				CBaseEntity *pCommandPointProp = gEntList.FindEntityByClassname( NULL, "prop_command_point" );
+				if ( pCommandPointProp )
+					UTIL_SetOrigin( pCommandPointProp, GetCommandGoal(), false );
+			}
+		}
+		else
+		{
+			if ( IsFollowingCommandPoint() )
+				ClearFollowTarget();
+			if ( m_FollowBehavior.GetFollowTarget() != UTIL_GetLocalPlayer() )
+			{
+				m_FollowBehavior.SetFollowTarget( UTIL_GetLocalPlayer() );
+				m_FollowBehavior.SetParameters( AIF_SIMPLE );
+			}
+		}
+	}
+	else if ( IsFollowingCommandPoint() )
+	{
+		ClearFollowTarget();
+	}
+}
+
+void CNPC_Combine::InputSetCommandable( inputdata_t &inputdata )
+{
+	(void)inputdata;
+	AddSpawnFlags( SF_COMBINE_COMMANDABLE );
+	SetUse( &CNPC_Combine::Use );
+}
+
+void CNPC_Combine::InputSetNonCommandable( inputdata_t &inputdata )
+{
+	(void)inputdata;
+	RemoveSpawnFlags( SF_COMBINE_COMMANDABLE );
+	RemoveFromPlayerSquad();
+}
+
+void CNPC_Combine::InputAddToPlayerSquad( inputdata_t &inputdata )
+{
+	(void)inputdata;
+	if ( !IsInPlayerSquad() )
+		AddToPlayerSquad();
+}
+
+void CNPC_Combine::InputRemoveFromPlayerSquad( inputdata_t &inputdata )
+{
+	(void)inputdata;
+	if ( IsInPlayerSquad() )
+		RemoveFromPlayerSquad();
+}
+
+bool CNPC_Combine::ShouldDeferToFollowBehavior( void )
+{
+	if ( !IsInPlayerSquad() )
+		return false;
+	if ( !m_FollowBehavior.CanSelectSchedule() || !m_FollowBehavior.FarFromFollowTarget() )
+		return false;
+
+	CBaseEntity *pFollow = m_FollowBehavior.GetFollowTarget();
+	if ( pFollow && m_StandoffBehavior.CanSelectSchedule() && !m_StandoffBehavior.IsBehindBattleLines( pFollow->GetAbsOrigin() ) )
+		return false;
+
+	if ( m_AssaultBehavior.CanSelectSchedule() && hl2_episodic.GetBool() )
+		return false;
+
+	return true;
+}
+
+Disposition_t CNPC_Combine::IRelationType( CBaseEntity *pTarget )
+{
+	Disposition_t disposition = BaseClass::IRelationType( pTarget );
+	if ( !pTarget )
+		return disposition;
+
+	if ( pTarget->Classify() == CLASS_ZOMBIE && disposition == D_HT )
+	{
+		if ( GetEnemies()->NumEnemies() > 1 && GetAbsOrigin().DistToSqr( pTarget->GetAbsOrigin() ) < Square( 96 ) )
+			return D_FR;
+	}
+	return disposition;
+}
+
+int CNPC_Combine::IRelationPriority( CBaseEntity *pTarget )
+{
+	int priority = BaseClass::IRelationPriority( pTarget );
+	if ( !pTarget || pTarget->Classify() != CLASS_ANTLION )
+		return priority;
+
+	extern int ACT_ANTLION_FLIP;
+	extern int ACT_ANTLION_ZAP_FLIP;
+	CAI_BaseNPC *pNPC = pTarget->MyNPCPointer();
+	if ( pNPC && ( pNPC->GetActivity() == ACT_ANTLION_FLIP || pNPC->GetActivity() == ACT_ANTLION_ZAP_FLIP ) )
+	{
+		if ( GetEnemy() && GetEnemy() != pTarget && GetAbsOrigin().DistToSqr( GetEnemy()->GetAbsOrigin() ) < Square( 180 ) )
+			return priority;
+		priority += 1;
+	}
+	return priority;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -383,6 +714,13 @@ void CNPC_Combine::PostNPCInit()
 			// DevWarning("**Combine Elite Soldier MUST be equipped with AR2\n");
 		}
 	}
+
+#ifdef EZ1
+	if ( IsInPlayerSquad() )
+	{
+		FixupPlayerSquad();
+	}
+#endif
 
 	BaseClass::PostNPCInit();
 }
@@ -428,6 +766,10 @@ void CNPC_Combine::GatherConditions()
 void CNPC_Combine::PrescheduleThink()
 {
 	BaseClass::PrescheduleThink();
+
+#ifdef EZ1
+	UpdateFollowCommandPoint();
+#endif
 
 	// Speak any queued sentences
 	m_Sentences.UpdateSentenceQueue();
@@ -547,6 +889,12 @@ bool CNPC_Combine::ShouldMoveAndShoot()
 	// If any code below changes this timer, the code is saying 
 	// "It's OK to move and shoot until gpGlobals->curtime == m_flStopMoveShootTime"
 	m_flStopMoveShootTime = FLT_MAX;
+
+#ifdef EZ1
+	// Commandable soldiers keep moving and shooting while they follow.
+	if ( IsCommandable() && !HasCondition( COND_NO_PRIMARY_AMMO, false ) )
+		return true;
+#endif
 
 	if( IsCurSchedule( SCHED_COMBINE_HIDE_AND_RELOAD, false ) )
 		m_flStopMoveShootTime = gpGlobals->curtime + random->RandomFloat( 0.4f, 0.6f );
@@ -1815,6 +2163,13 @@ int CNPC_Combine::SelectSchedule( void )
 			}
 		}
 
+#ifdef EZ1
+		if ( ShouldDeferToFollowBehavior() )
+		{
+			DeferSchedulingToBehavior( &m_FollowBehavior );
+			return BaseClass::SelectSchedule();
+		}
+#endif
 		if( BehaviorSelectSchedule() )
 		{
 			return BaseClass::SelectSchedule();
@@ -2047,10 +2402,32 @@ int CNPC_Combine::SelectScheduleAttack()
 // Input  :
 // Output :
 //-----------------------------------------------------------------------------
+#ifdef EZ1
+static bool EZ1_EnemyIsMortar( CBaseEntity *pEnemy )
+{
+	CBaseEntity *pParent = pEnemy ? pEnemy->GetParent() : NULL;
+	return pParent && FClassnameIs( pParent, "func_tankmortar" );
+}
+#endif
+
 int CNPC_Combine::TranslateSchedule( int scheduleType ) 
 {
 	switch( scheduleType )
 	{
+#ifdef EZ1
+	case SCHED_MOVE_TO_WEAPON_RANGE:
+		if ( GetEnemy() && !EZ1_EnemyIsMortar( GetEnemy() ) && GetCommandGoal() != vec3_invalid )
+		{
+			if ( GetActiveWeapon() && ( GetActiveWeapon()->CapabilitiesGet() & bits_CAP_WEAPON_RANGE_ATTACK1 ) && random->RandomInt( 0, 1 ) && HasCondition( COND_SEE_ENEMY ) && !HasCondition( COND_NO_PRIMARY_AMMO ) )
+				return TranslateSchedule( SCHED_RANGE_ATTACK1 );
+			return SCHED_STANDOFF;
+		}
+		break;
+	case SCHED_CHASE_ENEMY:
+		if ( GetEnemy() && !EZ1_EnemyIsMortar( GetEnemy() ) && GetCommandGoal() != vec3_invalid )
+			return SCHED_STANDOFF;
+		break;
+#endif
 	case SCHED_TAKE_COVER_FROM_ENEMY:
 		{
 			if ( m_pSquad )
@@ -2163,6 +2540,15 @@ int CNPC_Combine::TranslateSchedule( int scheduleType )
 				// do so!
 				return SCHED_COMBINE_AR2_ALTFIRE;
 			}
+
+#ifdef EZ1
+			if ( GetEnemy() && !EZ1_EnemyIsMortar( GetEnemy() ) && HaveCommandGoal() )
+			{
+				if ( GetActiveWeapon() && ( GetActiveWeapon()->CapabilitiesGet() & bits_CAP_WEAPON_RANGE_ATTACK1 ) && random->RandomInt( 0, 1 ) && HasCondition( COND_SEE_ENEMY ) && !HasCondition( COND_NO_PRIMARY_AMMO ) )
+					return TranslateSchedule( SCHED_RANGE_ATTACK1 );
+				return SCHED_STANDOFF;
+			}
+#endif
 
 			if( IsUsingTacticalVariant( TACTICAL_VARIANT_PRESSURE_ENEMY ) && !IsRunningBehavior() )
 			{
@@ -2326,7 +2712,11 @@ void CNPC_Combine::HandleAnimEvent( animevent_t *pEvent )
 			{
 				EmitSound( "Weapon_CombineGuard.Special1" );
 			}
-			else if( FClassnameIs( GetActiveWeapon(), "weapon_smg1" ) )
+			else if( FClassnameIs( GetActiveWeapon(), "weapon_smg1" )
+#ifdef EZ1
+				|| FClassnameIs( GetActiveWeapon(), "weapon_smg2" )
+#endif
+				)
 			{
 				EmitSound( "Weapon_SMG1.Double" );
 			}
@@ -2470,6 +2860,14 @@ void CNPC_Combine::HandleAnimEvent( animevent_t *pEvent )
 
 						CTakeDamageInfo info( this, this, m_nKickDamage, DMG_CLUB );
 						CalculateMeleeDamageForce( &info, forward, pBCC->GetAbsOrigin() );
+#ifdef EZ1
+						// Commandable soldiers drop a rebel in one kick. Damage is
+						// applied after the force is calculated so the body is not launched.
+						if ( IsCommandable() && pBCC->ClassMatches( "npc_citizen" ) )
+						{
+							info.SetDamage( pBCC->GetHealth() );
+						}
+#endif
 						pBCC->TakeDamage( info );
 
 						EmitSound( "NPC_Combine.WeaponBash" );
@@ -2897,8 +3295,12 @@ bool CNPC_Combine::CanAltFireEnemy( bool bUseFreeKnowledge )
 
 	CBaseEntity *pEnemy = GetEnemy();
 
+#ifndef EZ1
+	// Vanilla elites only ball the player and player allies. EZ1 commandable
+	// elites also ball zombies and other hostiles.
 	if( !pEnemy->IsPlayer() && (!pEnemy->IsNPC() || !pEnemy->MyNPCPointer()->IsPlayerAlly()) )
 		return false;
+#endif
 
 	Vector vecTarget;
 
@@ -3131,6 +3533,10 @@ bool CNPC_Combine::OnBeginMoveAndShoot()
 {
 	if ( BaseClass::OnBeginMoveAndShoot() )
 	{
+#ifdef EZ1
+		if ( IsCommandable() )
+			return true;
+#endif
 		if( HasStrategySlotRange( SQUAD_SLOT_ATTACK1, SQUAD_SLOT_ATTACK2 ) )
 			return true; // already have the slot I need
 
@@ -3171,7 +3577,11 @@ WeaponProficiency_t CNPC_Combine::CalcWeaponProficiency( CBaseCombatWeapon *pWea
 
 		return WEAPON_PROFICIENCY_PERFECT;
 	}
-	else if( FClassnameIs( pWeapon, "weapon_smg1" ) )
+	else if( FClassnameIs( pWeapon, "weapon_smg1" )
+#ifdef EZ1
+		|| FClassnameIs( pWeapon, "weapon_smg2" )
+#endif
+		)
 	{
 		return WEAPON_PROFICIENCY_GOOD;
 	}
@@ -3233,8 +3643,28 @@ bool CNPC_Combine::HandleInteraction(int interactionType, void *data, CBaseComba
 		return true;
 	}
 
+#ifdef EZ1
+	if ( interactionType == g_interactionHitByPlayerThrownPhysObj )
+	{
+		CBaseEntity *pTarget = UTIL_GetLocalPlayer();
+		if ( pTarget )
+		{
+			CSoundEnt::InsertSound( SOUND_PLAYER | SOUND_CONTEXT_COMBINE_ONLY, pTarget->GetAbsOrigin(), 128, 0.1, pTarget );
+		}
+	}
+#endif
+
 	return BaseClass::HandleInteraction( interactionType, data, sourceEnt );
 }
+
+#ifdef EZ1
+bool CNPC_Combine::FValidateHintType( CAI_Hint *pHint )
+{
+	if ( pHint && pHint->HintType() == HINT_WORLD_VISUALLY_INTERESTING )
+		return true;
+	return BaseClass::FValidateHintType( pHint );
+}
+#endif
 
 //-----------------------------------------------------------------------------
 //
@@ -3292,6 +3722,16 @@ bool CNPC_Combine::ShouldPickADeathPose( void )
 { 
 	return !IsCrouching(); 
 }
+
+#ifdef EZ1
+int CNPC_Combine::CCombineFollowBehavior::SelectSchedule( void )
+{
+	int result = GetOuterS()->SelectScheduleAttack();
+	if ( result == SCHED_NONE || result == SCHED_RANGE_ATTACK1 )
+		result = BaseClass::SelectSchedule();
+	return result;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 //
