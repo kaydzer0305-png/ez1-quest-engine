@@ -449,7 +449,7 @@ static void SyncEZ2( const EzVrController &L, const EzVrController &R )
         EdgeCmd( &g2_flash, R.stickClick, "impulse 100\n" );
 
         // 0 smooth, 1 teleport (~2.4 m), 2 dash (~4.8 m blink + shove).
-        // Read live so the menu's +ez2vr_locomotion_mode takes effect.
+        // Read live so a menu change of ez2vr_locomotion_mode takes effect.
         int loco = CvarInt( "ez2vr_locomotion_mode", 0 );
         if ( loco < 0 || loco > 2 )
                 loco = 0;
@@ -479,16 +479,14 @@ static void SyncEZ2( const EzVrController &L, const EzVrController &R )
                 const float gate = 0.65f;
                 if ( mag > gate && g2_blinkArm )
                 {
-                        float fwd = 0.f, right = 0.f;
-                        if ( fabsf( ly ) >= fabsf( lx ) )
-                                fwd = ly > 0.f ? 1.f : -1.f;
-                        else
-                                right = lx > 0.f ? 1.f : -1.f;
+                        // Stick direction, not a 4-way snap. ly>0 is +forward
+                        // and lx>0 is +moveright, same signs as smooth mode.
+                        // ez2vr_blink normalizes against flattened eye yaw.
                         const float dist = ( loco == 2 ) ? 192.f : 96.f;
                         const int dash = ( loco == 2 ) ? 1 : 0;
                         char buf[96];
-                        snprintf( buf, sizeof buf, "ez2vr_blink %g %g %g %d\n",
-                                fwd, right, dist, dash );
+                        snprintf( buf, sizeof buf, "ez2vr_blink %.3f %.3f %.0f %d\n",
+                                ly, lx, dist, dash );
                         SendCmd( buf );
                         g2_blinkArm = 0;
                 }
