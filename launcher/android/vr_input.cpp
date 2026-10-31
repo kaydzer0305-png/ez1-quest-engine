@@ -119,6 +119,27 @@ bool EzVrInputInit( XrInstance instance, XrSession session, XrSpace localSpace, 
                 return false;
         }
 
+        // Quest Touch (/interaction_profiles/oculus/touch_controller) exposes
+        // trigger and squeeze as floats, not clicks. Do not suggest
+        // trigger/click or squeeze/click here: an unknown path fails the
+        // whole xrSuggestInteractionProfileBindings call and input never
+        // attaches. Presses are thresholded in ezquest_vr_sourceinput.cpp.
+        //
+        // EZ2 command mapping (vr_bindings_ez2.cfg section 2), applied only
+        // when SOURCEVR_GAME=EntropyZero2:
+        //   right trigger value .... +attack
+        //   right squeeze value .... +attack2
+        //   left trigger value ..... +use
+        //   left squeeze value ..... +reload
+        //   right A (a/click) ...... next arsenal group (the cfg's 1-6 chains)
+        //   right B (b/click) ...... impulse 101 (sv_cheats, same as the key bind)
+        //   left X (x/click) ....... lastinv
+        //   left Y (y/click) ....... +showscores while held
+        //   left thumbstick ........ locomotion per ez2vr_locomotion_mode
+        //   left thumbstick click .. +jump while held (sprint stays full deflection)
+        //   right thumbstick ....... turn per ez2vr_turn_mode
+        //   right thumbstick click . impulse 100 (flashlight)
+        // EZ1 keeps the older chord layout in that same file.
         struct Bind { XrAction action; const char *path; };
         const Bind binds[] = {
                 { g_in.gripPose, "/user/hand/left/input/grip/pose" },

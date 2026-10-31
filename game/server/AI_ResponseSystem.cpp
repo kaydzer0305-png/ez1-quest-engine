@@ -724,6 +724,17 @@ public:
 
 	void		ResponseWarning( const char *fmt, ... );
 
+	// Index type is signed short on purpose (Mapbase ships the same). Valid
+	// slots are 0..32766. EZ2's talker set fits — a device boot parsed 982
+	// rules with no overflow. The CUtlRBTree overflow during content load was
+	// not this ceiling being too small for the content: ParseRule used to
+	// treat the unknown keyword applyContextToSquad as an inline criterion,
+	// eat the next token as its value, and then ping-pong on the root "rule"
+	// token, fabricating [RuleNameNNN] entries until NewNode() called
+	// Error("CUtlRBTree overflow!"). The keywords and the IsRootCommand bailout
+	// below stop that loop. Widening the index would only turn a leftover
+	// desync into an OOM. The EZ2 insert guard refuses the last few slots so
+	// a future desync logs the criterion name instead of killing the process.
 	CUtlDict< ResponseGroup, short >	m_Responses;
 	CUtlDict< Criteria, short >	m_Criteria;
 	CUtlDict< Rule, short >	m_Rules;
@@ -2449,6 +2460,22 @@ int CResponseSystem::ParseOneCriterion( const char *criterionName )
 		ResponseWarning( "Multiple definitions for criteria '%s'\n", criterionName );
 		return m_Criteria.InvalidIndex();
 	}
+
+#ifdef EZ2
+	// See the dict declaration. 32767 is the signed-short InvalidIndex collision;
+	// stop a little early so the refusal itself cannot be the allocating call.
+	if ( m_Criteria.Count() >= 32760 )
+	{
+		static int s_refused = 0;
+		if ( s_refused++ == 0 )
+		{
+			Msg( "EZDIAG: criteria dict at 16-bit ceiling (%d), refusing further inserts; last '%s'\n",
+				(int)m_Criteria.Count(), criterionName );
+		}
+		ResponseWarning( "criteria dict full (%d), refusing '%s'\n", (int)m_Criteria.Count(), criterionName );
+		return m_Criteria.InvalidIndex();
+	}
+#endif
 
 	int idx = m_Criteria.Insert( criterionName, newCriterion );
 	static int s_criteriaInserts = 0;
