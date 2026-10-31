@@ -4,11 +4,16 @@ Copyright (C) 2026 kaydzer0305-png
 Maps Quest Touch (EzVrInputState) onto Source movement/attack commands.
 Does not use HID/SDL joystick paths.
 
-Per-profile extras: SOURCEVR_GAME selects the arsenal layout. EZ1 keeps its
-plan-Phase-3 extras (Bad Cop kick on +alt1, nightvision on impulse 100, the
-manhack-toss weapon on slot5). EZ2 (EntropyZero2) has no manhack-toss weapon,
-so that chord is lastinv (previous weapon — the panic key) there instead;
-kick/nightvision are shared HL2-kit behavior and stay.
+SOURCEVR_GAME selects the layout.
+
+EZ1 keeps its plan-Phase-3 extras (Bad Cop kick on +alt1, nightvision on a
+long-press of the face button via impulse 100, the manhack-toss weapon on
+slot5). That path is unchanged.
+
+EZ2 follows vr_bindings_ez2.cfg section 2 (the VR action table), not the EZ1
+chords. OpenXR actions are created in vr_input.cpp; this file is what turns
+them into +attack / +use / blink commands. The Touch profile has float trigger
+and squeeze values and no click paths, so presses are analog thresholds.
 */
 
 #if defined( ANDROID ) || defined( __ANDROID__ )
@@ -19,11 +24,14 @@ kick/nightvision are shared HL2-kit behavior and stay.
 #include <android/log.h>
 #include <dlfcn.h>
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
 
 #include "inputsystem/iinputsystem.h"
+#include "icvar.h"
+#include "tier1/convar.h"
 #include "tier1/interface.h"
 
 #define EZTAG "EZQuest-VR-Input"
@@ -233,25 +241,76 @@ static void PostMouseYaw( float yawDelta )
         g_input->PostUserEvent( ev );
 }
 
+static void ApplyTurn( float rx, int snap, float degrees )
+{
+        if ( snap )
+        {
+                const float gate = 0.68f;
+                if ( fabsf( rx ) > gate && !g_snapLatched )
+                {
+                        if ( degrees < 15.f ) degrees = 15.f;
+                        if ( degrees > 90.f ) degrees = 90.f;
+                        const float ticks = degrees / 0.022f;
+                        PostMouseYaw( ( rx > 0.f ? ticks : -ticks ) / 220.f );
+                        g_snapLatched = 1;
+                }
+                else if ( fabsf( rx ) < 0.35f )
+                {
+                        g_snapLatched = 0;
+                }
+        }
+        else if ( fabsf( rx ) > 0.12f )
+        {
+                PostMouseYaw( rx );
+        }
+}
+
+// Live menu values. Retried until vstdlib's ICVar is up; a miss returns the
+// catalog default so the first frames before the game DLL registers still
+// match vr_defaults.cfg (smooth off, snap on, 30 degrees).
+static ICvar *GetCvar( void )
+{
+        static ICvar *cvar = NULL;
+        if ( cvar )
+                return cvar;
+        const char *libs[] = { "libvstdlib.so", "libengine.so", NULL };
+        for ( int i = 0; libs[i]; i++ )
+        {
+                void *h = dlopen( libs[i], RTLD_NOW | RTLD_NOLOAD );
+                if ( !h )
+                        h = dlopen( libs[i], RTLD_NOW );
+                if ( !h )
+                        continue;
+                CreateInterfaceFn factory = (CreateInterfaceFn)dlsym( h, "CreateInterface" );
+                if ( !factory )
+                        continue;
+                cvar = (ICvar *)factory( CVAR_INTERFACE_VERSION, NULL );
+                if ( cvar )
+                {
+                        EZLOG( "resolved ICvar from %s", libs[i] );
+                        return cvar;
+                }
+        }
+        return NULL;
+}
+
+static int CvarInt( const char *name, int deflt )
+{
+        ICvar *cvar = GetCvar();
+        if ( !cvar || !name )
+                return deflt;
+        ConVar *cv = cvar->FindVar( name );
+        if ( !cv )
+                return deflt;
+        return cv->GetInt();
+}
+
 } // namespace
 
-void EZQuestVrSourceInputSync( void )
+// EZ1 chord layout. Kept as it was: kick, nightvision long-press, manhack on
+// slot5. Not used when SOURCEVR_GAME is EntropyZero2.
+static void SyncEZ1( const EzVrController &L, const EzVrController &R )
 {
-        if ( !EnvTruthy( "EZQUEST_VR_SOURCE_INPUT", 1 ) )
-                return;
-
-        ResolveEngine();
-        if ( !g_cbuf && !g_input )
-                return;
-
-        EzVrInputState st;
-        memset( &st, 0, sizeof st );
-        if ( !EzVrInputGetState( &st ) || !st.ready )
-                return;
-
-        const EzVrController &L = st.hands[EZ_VR_HAND_LEFT];
-        const EzVrController &R = st.hands[EZ_VR_HAND_RIGHT];
-
         const float dead = 0.25f;
         const float ly = L.active ? L.stickY : 0.f;
         const float lx = L.active ? L.stickX : 0.f;
@@ -268,10 +327,7 @@ void EZQuestVrSourceInputSync( void )
 
         if ( ( L.gripClick || L.grip > 0.7f ) && R.stickClick && !g_manhack )
         {
-                // EZ1: the manhack-toss weapon lives on slot5. EZ2 has no such
-                // weapon; lastinv (previous weapon) is the always-valid panic
-                // key instead.
-                SendCmd( IsEZ2() ? "lastinv\n" : "slot5\n" );
+                SendCmd( "slot5\n" );
                 g_manhack = 1;
         }
         else if ( !R.stickClick )
@@ -317,36 +373,162 @@ void EZQuestVrSourceInputSync( void )
         Hold( &g_use, L.gripClick && L.triggerClick, "+use\n", "-use\n" );
         Hold( &g_menu, R.menuButton || L.menuButton, "cancelselect\n", "" );
 
-        if ( EnvTruthy( "EZQUEST_VR_SNAP_TURN", 1 ) )
+        float deg = 30.f;
+        const char *ds = getenv( "EZQUEST_VR_SNAP_DEGREES" );
+        if ( ds && ds[0] )
+                deg = (float)atof( ds );
+        ApplyTurn( rx, EnvTruthy( "EZQUEST_VR_SNAP_TURN", 1 ), deg );
+}
+
+// vr_bindings_ez2.cfg section 2. Strings in kEz2Groups are the keyboard
+// fallback chains, one arsenal group per right-A press, in that file's order.
+static int g2_fwd, g2_back, g2_ml, g2_mr, g2_speed;
+static int g2_atk, g2_atk2, g2_use, g2_reload, g2_scores, g2_menu;
+static int g2_a, g2_b, g2_x, g2_flash;
+static int g2_slot;
+static int g2_blinkArm = 1;
+
+static const char *const kEz2Groups[] = {
+        "use weapon_crowbar; use weapon_stunstick\n",
+        "use weapon_displacer_pistol; use weapon_pulsepistol; use weapon_357\n",
+        "use weapon_smg1; use weapon_smg2; use weapon_oicw; use weapon_ar2_proto\n",
+        "use weapon_shotgun; use weapon_crossbow; use weapon_physcannon\n",
+        "use weapon_frag; use weapon_hopwire\n",
+        "use weapon_slam\n",
+};
+
+static void EdgeCmd( int *latch, int down, const char *cmd )
+{
+        if ( down && !*latch )
         {
-                const float gate = 0.68f;
-                if ( fabsf( rx ) > gate && !g_snapLatched )
+                SendCmd( cmd );
+                *latch = 1;
+        }
+        else if ( !down )
+        {
+                *latch = 0;
+        }
+}
+
+static void SyncEZ2( const EzVrController &L, const EzVrController &R )
+{
+        // Catalog defaults: grip threshold 0.6, sprint floor 0.85. Trigger and
+        // squeeze are floats on this profile (see vr_input.cpp).
+        const float press = 0.60f;
+        const float dead = 0.25f;
+        const float sprintFloor = 0.85f;
+        const int rTrig = R.trigger > press;
+        const int rGrip = R.grip > press;
+        const int lTrig = L.trigger > press;
+        const int lGrip = L.grip > press;
+        const float ly = L.active ? L.stickY : 0.f;
+        const float lx = L.active ? L.stickX : 0.f;
+        const float rx = R.active ? R.stickX : 0.f;
+
+        Hold( &g2_atk, rTrig, "+attack\n", "-attack\n" );
+        Hold( &g2_atk2, rGrip, "+attack2\n", "-attack2\n" );
+        Hold( &g2_use, lTrig, "+use\n", "-use\n" );
+        Hold( &g2_reload, lGrip, "+reload\n", "-reload\n" );
+        Hold( &g2_scores, L.secondaryButton, "+showscores\n", "-showscores\n" );
+        Hold( &g2_menu, L.menuButton || R.menuButton, "cancelselect\n", "" );
+
+        if ( R.primaryButton && !g2_a )
+        {
+                SendCmd( kEz2Groups[g2_slot] );
+                EZLOG( "arsenal group %d", g2_slot + 1 );
+                g2_slot = ( g2_slot + 1 ) % (int)( sizeof kEz2Groups / sizeof kEz2Groups[0] );
+                g2_a = 1;
+        }
+        else if ( !R.primaryButton )
+        {
+                g2_a = 0;
+        }
+
+        EdgeCmd( &g2_b, R.secondaryButton, "impulse 101\n" );
+        EdgeCmd( &g2_x, L.primaryButton, "lastinv\n" );
+        EdgeCmd( &g2_flash, R.stickClick, "impulse 100\n" );
+
+        // 0 smooth, 1 teleport (~2.4 m), 2 dash (~4.8 m blink + shove).
+        // Read live so the menu's +ez2vr_locomotion_mode takes effect.
+        int loco = CvarInt( "ez2vr_locomotion_mode", 0 );
+        if ( loco < 0 || loco > 2 )
+                loco = 0;
+
+        const int moving = ( ly > dead || ly < -dead || lx > dead || lx < -dead );
+        const float mag = sqrtf( lx * lx + ly * ly );
+        if ( loco == 0 )
+        {
+                Hold( &g2_fwd,  ly >  dead, "+forward\n", "-forward\n" );
+                Hold( &g2_back, ly < -dead, "+back\n", "-back\n" );
+                Hold( &g2_ml,   lx < -dead, "+moveleft\n", "-moveleft\n" );
+                Hold( &g2_mr,   lx >  dead, "+moveright\n", "-moveright\n" );
+                Hold( &g2_speed, L.stickClick || ( moving && mag >= sprintFloor ),
+                        "+speed\n", "-speed\n" );
+                // Don't fire a blink on the frame the menu switches into
+                // teleport while the stick is already deflected.
+                g2_blinkArm = ( mag < 0.35f ) ? 1 : 0;
+        }
+        else
+        {
+                Hold( &g2_fwd, 0, "+forward\n", "-forward\n" );
+                Hold( &g2_back, 0, "+back\n", "-back\n" );
+                Hold( &g2_ml, 0, "+moveleft\n", "-moveleft\n" );
+                Hold( &g2_mr, 0, "+moveright\n", "-moveright\n" );
+                Hold( &g2_speed, 0, "+speed\n", "-speed\n" );
+
+                const float gate = 0.65f;
+                if ( mag > gate && g2_blinkArm )
                 {
-                        float deg = 30.f;
-                        const char *ds = getenv( "EZQUEST_VR_SNAP_DEGREES" );
-                        if ( ds && ds[0] )
-                                deg = (float)atof( ds );
-                        if ( deg < 15.f ) deg = 15.f;
-                        if ( deg > 90.f ) deg = 90.f;
-                        const float ticks = deg / 0.022f;
-                        PostMouseYaw( ( rx > 0.f ? ticks : -ticks ) / 220.f );
-                        g_snapLatched = 1;
+                        float fwd = 0.f, right = 0.f;
+                        if ( fabsf( ly ) >= fabsf( lx ) )
+                                fwd = ly > 0.f ? 1.f : -1.f;
+                        else
+                                right = lx > 0.f ? 1.f : -1.f;
+                        const float dist = ( loco == 2 ) ? 192.f : 96.f;
+                        const int dash = ( loco == 2 ) ? 1 : 0;
+                        char buf[96];
+                        snprintf( buf, sizeof buf, "ez2vr_blink %g %g %g %d\n",
+                                fwd, right, dist, dash );
+                        SendCmd( buf );
+                        g2_blinkArm = 0;
                 }
-                else if ( fabsf( rx ) < 0.35f )
+                else if ( mag < 0.35f )
                 {
-                        g_snapLatched = 0;
+                        g2_blinkArm = 1;
                 }
         }
-        else if ( fabsf( rx ) > 0.12f )
-        {
-                PostMouseYaw( rx );
-        }
+
+        const int snap = CvarInt( "ez2vr_turn_mode", 0 ) == 0;
+        ApplyTurn( rx, snap, (float)CvarInt( "ez2vr_turn_snap_angle", 30 ) );
+}
+
+void EZQuestVrSourceInputSync( void )
+{
+        if ( !EnvTruthy( "EZQUEST_VR_SOURCE_INPUT", 1 ) )
+                return;
+
+        ResolveEngine();
+        if ( !g_cbuf && !g_input )
+                return;
+
+        EzVrInputState st;
+        memset( &st, 0, sizeof st );
+        if ( !EzVrInputGetState( &st ) || !st.ready )
+                return;
+
+        const EzVrController &L = st.hands[EZ_VR_HAND_LEFT];
+        const EzVrController &R = st.hands[EZ_VR_HAND_RIGHT];
+
+        if ( IsEZ2() )
+                SyncEZ2( L, R );
+        else
+                SyncEZ1( L, R );
 
         if ( !g_logged )
         {
                 g_logged = 1;
                 EZLOG( "source mapping live (cbuf=%d inputsys=%d %s)", g_cbuf ? 1 : 0, g_input ? 1 : 0,
-                       IsEZ2() ? "ez2-kick/nv/lastinv" : "ez1-kick/nv/manhack" );
+                       IsEZ2() ? "ez2-action-table" : "ez1-kick/nv/manhack" );
         }
 }
 
