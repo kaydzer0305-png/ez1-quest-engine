@@ -136,6 +136,7 @@ bool EzVrInputInit( XrInstance instance, XrSession session, XrSpace localSpace, 
         //   left X (x/click) ....... lastinv
         //   left Y (y/click) ....... +showscores while held
         //   left thumbstick ........ locomotion per ez2vr_locomotion_mode
+        //   left thumbstick click .. +jump while held (sprint stays full deflection)
         //   right thumbstick ....... turn per ez2vr_turn_mode
         //   right thumbstick click . impulse 100 (flashlight)
         // EZ1 keeps the older chord layout in that same file.

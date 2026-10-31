@@ -383,7 +383,7 @@ static void SyncEZ1( const EzVrController &L, const EzVrController &R )
 // vr_bindings_ez2.cfg section 2. Strings in kEz2Groups are the keyboard
 // fallback chains, one arsenal group per right-A press, in that file's order.
 static int g2_fwd, g2_back, g2_ml, g2_mr, g2_speed;
-static int g2_atk, g2_atk2, g2_use, g2_reload, g2_scores, g2_menu;
+static int g2_atk, g2_atk2, g2_use, g2_reload, g2_scores, g2_menu, g2_jump;
 static int g2_a, g2_b, g2_x, g2_flash;
 static int g2_slot;
 static int g2_blinkArm = 1;
@@ -431,6 +431,10 @@ static void SyncEZ2( const EzVrController &L, const EzVrController &R )
         Hold( &g2_reload, lGrip, "+reload\n", "-reload\n" );
         Hold( &g2_scores, L.secondaryButton, "+showscores\n", "-showscores\n" );
         Hold( &g2_menu, L.menuButton || R.menuButton, "cancelselect\n", "" );
+        // Left stick click. Right A / left X are arsenal and lastinv, right
+        // stick click is the flashlight, and sprint is already full deflection
+        // below. EZ1 still uses this click for +speed.
+        Hold( &g2_jump, L.stickClick, "+jump\n", "-jump\n" );
 
         if ( R.primaryButton && !g2_a )
         {
@@ -462,7 +466,7 @@ static void SyncEZ2( const EzVrController &L, const EzVrController &R )
                 Hold( &g2_back, ly < -dead, "+back\n", "-back\n" );
                 Hold( &g2_ml,   lx < -dead, "+moveleft\n", "-moveleft\n" );
                 Hold( &g2_mr,   lx >  dead, "+moveright\n", "-moveright\n" );
-                Hold( &g2_speed, L.stickClick || ( moving && mag >= sprintFloor ),
+                Hold( &g2_speed, moving && mag >= sprintFloor,
                         "+speed\n", "-speed\n" );
                 // Don't fire a blink on the frame the menu switches into
                 // teleport while the stick is already deflected.
