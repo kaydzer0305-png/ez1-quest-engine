@@ -41,7 +41,18 @@ public:
 	
 	void		Drop( const Vector &vecVelocity );
 	void		ImpactEffect( trace_t &traceHit );
+#ifdef EZ
+	// EZ1/EZ2 charged swing. Attack2 builds charge; releasing it (or a 3s
+	// timeout, or pressing attack) commits PrimaryAttack. The HL2 profile
+	// keeps the empty secondary so the stick never swings on attack2.
+	virtual void	PrimaryAttack( void );
+	virtual void	ItemPostFrame( void );
+	virtual void	SecondaryAttack( void );
+	virtual void	Hit( trace_t &traceHit, Activity nHitActivity, bool bIsSecondary );
+	bool			InSwing( void );
+#else
 	void		SecondaryAttack( void )	{}
+#endif
 	void		SetStunState( bool state );
 	bool		GetStunState( void );
 	void		Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator );
@@ -53,6 +64,11 @@ public:
 private:
 
 	CNetworkVar( bool, m_bActive );
+#ifdef EZ
+	CNetworkVar( bool, m_bInSwing );
+	float		m_flLastChargeTime;
+	float		m_flChargeAmount;
+#endif
 };
 
 #endif // WEAPON_STUNSTICK_H

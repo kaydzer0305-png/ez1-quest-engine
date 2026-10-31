@@ -4,7 +4,7 @@ Source: [entropy-zero/source-sdk-2013](https://github.com/entropy-zero/source-sd
 This list is the Phase 1b merge surface against the nillerusr Android tree.
 **Do not copy whole files.** Port only the EZ / EZ1 conditional blocks.
 
-CI must stay on `--build-games=hl2` until these hunks compile on this tree.
+Pull requests compile `--build-games=ez1`. Manual dispatch of `build-android-arm64` stays on `hl2`.
 
 ## Priority 1
 
@@ -18,7 +18,7 @@ CI must stay on `--build-games=hl2` until these hunks compile on this tree.
 | `game/server/hl2/npc_metropolice.cpp` | 2 |
 | `game/server/hl2/npc_combine.cpp` | 43 |
 
-The gamerules, player, base-NPC and metropolice core hunks landed in PR #21. Remaining Priority 1 work is the stunstick surface and the compatible subset of Combine NPC hunks.
+The gamerules, player, base-NPC and metropolice core hunks landed in PR #21. The stunstick charge surface and the compatible Combine ally-squad subset are in tree now (see `docs/ez1-merge.md`). What is still open is the companion base-class swap, manhack deploy, health regen, the stunstick projected texture, and Priority 2.
 
 ## Priority 2 — high-churn NPCs EZ1 maps spawn
 

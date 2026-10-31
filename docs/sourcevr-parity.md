@@ -21,9 +21,12 @@ from the decompiled `SourceVR-0.1.25.apk`
   so a Java-only profile entry in the SourceVR APK could never boot EZ1
   game code. The portable direction is the reverse: teach EZQuest the
   SourceVR launcher contracts.
-- CI and the manifest intentionally stay on `hl2` until `/sdcard/srceng/ez1`
+- Pull-request CI compiles `--build-games=ez1`. The manifest and a manual
+  `build-android-arm64` dispatch stay on `hl2` until `/sdcard/srceng/ez1`
   exists (see `docs/ez1-merge.md`). The dev override lets testers boot `ez1`
   content on an `hl2`-manifest build without flipping the manifest early.
+  Dispatch `game_profile=ez1` to bake the flip into one APK without editing
+  the committed manifest.
 
 ## Usage
 

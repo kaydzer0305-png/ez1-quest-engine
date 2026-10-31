@@ -46,7 +46,11 @@
         <meta-data
             android:name="com.oculus.supportedDevices"
             android:value="all"/>
-        <!-- Active game profile (hl2 today; flip to ez1 once the mod game code merges) -->
+        <!-- Active game profile. Committed default is hl2 so a sideload still
+             boots /sdcard/srceng/hl2. Flip this one value to ez1 once that
+             folder exists on the headset (or dispatch build-android-arm64
+             with game_profile=ez1, which rewrites only the packaged manifest).
+             An adb-gated boot of ez1 without this flip is RUN_DEV_PROFILE. -->
         <meta-data
             android:name="com.ezquest.engine.GAME_PROFILE"
             android:value="hl2"/>

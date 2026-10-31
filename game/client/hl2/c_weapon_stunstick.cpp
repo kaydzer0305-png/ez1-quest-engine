@@ -49,7 +49,14 @@ public:
 
 			CMatRenderContextPtr pRenderContext( materials );
 			pRenderContext->Bind( pMaterial );
+#ifdef EZ
+			// m_bInSwing is the charged-hold bit from the server. The deployed
+			// stick already glows via m_bActive; charging makes that halo larger.
+			const float flHalo = m_bInSwing ? random->RandomFloat( 8.0f, 12.0f ) : random->RandomFloat( 4.0f, 6.0f );
+			DrawHalo( pMaterial, vEnd, flHalo, color );
+#else
 			DrawHalo( pMaterial, vEnd, random->RandomFloat( 4.0f, 6.0f ), color );
+#endif
 
 			color[0] = color[1] = color[2] = random->RandomFloat( 0.9f, 1.0f );
 
@@ -65,7 +72,11 @@ public:
 		// Update our effects
 		if ( m_bActive && 
 			gpGlobals->frametime != 0.0f &&
+#ifdef EZ
+			( random->RandomInt( 0, m_bInSwing ? 2 : 5 ) == 0 ) )
+#else
 			( random->RandomInt( 0, 5 ) == 0 ) )
+#endif
 		{
 			Vector	vecOrigin;
 			QAngle	vecAngles;
@@ -150,6 +161,9 @@ public:
 
 private:
 	CNetworkVar( bool, m_bActive );
+#ifdef EZ
+	CNetworkVar( bool, m_bInSwing );
+#endif
 };
 
 
@@ -183,5 +197,8 @@ STUB_WEAPON_CLASS_IMPLEMENT( weapon_stunstick, C_WeaponStunStick );
 
 IMPLEMENT_CLIENTCLASS_DT( C_WeaponStunStick, DT_WeaponStunStick, CWeaponStunStick )
 	RecvPropInt( RECVINFO(m_bActive), 0, RecvProxy_StunActive ),
+#ifdef EZ
+	RecvPropInt( RECVINFO(m_bInSwing) ),
+#endif
 END_RECV_TABLE()
 

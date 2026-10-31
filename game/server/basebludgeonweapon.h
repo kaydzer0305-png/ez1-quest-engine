@@ -46,11 +46,13 @@ public:
 
 protected:
 	virtual	void	ImpactEffect( trace_t &trace );
+	// Protected so the EZ charged stunstick can electrify a killing blow.
+	// No other melee weapon overrides this; the HL2 swing path is unchanged.
+	virtual void	Hit( trace_t &traceHit, Activity nHitActivity, bool bIsSecondary );
 
 private:
 	bool			ImpactWater( const Vector &start, const Vector &end );
 	void			Swing( int bIsSecondary );
-	void			Hit( trace_t &traceHit, Activity nHitActivity, bool bIsSecondary );
 	Activity		ChooseIntersectionPointAndActivity( trace_t &hitTrace, const Vector &mins, const Vector &maxs, CBasePlayer *pOwner );
 };
 

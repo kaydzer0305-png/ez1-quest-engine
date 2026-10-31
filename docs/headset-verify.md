@@ -23,7 +23,7 @@ Use pre-20th-anniversary HL2 (`steam_legacy`). Own the games; nothing from Steam
 
 ## How to run
 
-1. Dispatch `build-android-arm64` with `build_games=hl2`.
+1. Dispatch `build-android-arm64` with `build_games=hl2` and `game_profile=hl2` (both defaults).
 2. Sideload `SourceQuest.apk` and set `BOOT_MODE=vr`.
 3. With `adb` connected to the Quest 3S:
 
@@ -53,3 +53,11 @@ bash scripts/headset-verify.sh
    - If performance is poor, try `EZQUEST_XR_RES_SCALE=0.75` before changing FFR.
 
 Paste the `--once` summary into issue #22. Do not set `GAME_PROFILE=ez1` until this passes.
+
+## After the HL2 gate, still on a headset
+
+These need EZ1 content at `/sdcard/srceng/ez1` plus a profile flip (manifest `android:value`, dispatch `game_profile=ez1`, or the `RUN_DEV_PROFILE` adb override). They cannot be checked from CI.
+
+1. **Charged stunstick.** Hold grip (`+attack2`) and release. The swing should hit harder the longer it was held, the halo should grow while charging, and a killing blow on an NPC should electrify the ragdoll. There is no projected flashlight on the stick yet.
+2. **Commandable Combine.** A soldier with spawnflag bit 19 (`SetCommandable` does the same) should follow on `+use`, take a move order, and shoot rebels/zombies rather than Bad Cop. Bit 20 is reserved for regen and does nothing yet. Soldiers do not deploy manhacks.
+3. **Profile flip.** With the content folders present, `GAME_PROFILE=ez1` should log `profile=ez1 game=/sdcard/srceng/ez1`. Missing `ez1/gameinfo.txt` must fail closed instead of booting HL2 content under EZ rules.

@@ -11,7 +11,8 @@ PROJECT_NAME = 'server'
 games = {
 	'hl2': ['server_base.vpc', 'server_hl2.vpc'],
 	# Extra EZ1 units (manhack toss, APC, EZ2 NPCs, custom weapons) sit in
-	# server_ez1_extras.vpc. Shared #ifdef EZ hunks are still a follow-up.
+	# server_ez1_extras.vpc. EZ stunstick charge and EZ1 combine ally-squad
+	# live in the HL2 files this list already compiles.
 	'ez1': ['server_base.vpc', 'server_hl2.vpc', 'server_ez1_extras.vpc'],
 	# EZ2 target profile. M1 ships wiring + the ez2vr convar contract only;
 	# the EZ2 unit roster joins in server_ez2_extras.vpc in M2+.
